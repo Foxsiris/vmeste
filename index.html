@@ -766,6 +766,18 @@
     .modal { padding: 22px; border-radius: 18px; }
     .modal-overlay { padding: 12px; }
     .seg { flex-wrap: wrap; }
+
+    /* prevent any sideways page scroll; make filter chips a swipe strip */
+    .app { overflow-x: clip; }
+    .filter-chips {
+      flex: 1 1 100%; min-width: 0;
+      flex-wrap: nowrap; overflow-x: auto;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .filter-chips::-webkit-scrollbar { height: 0; }
+    .filter-chips .chip { flex-shrink: 0; }
   }
 
   @media (max-width: 430px) {

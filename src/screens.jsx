@@ -21,7 +21,7 @@ function FeedScreen({ activities, onLike, onDelete, onSelect }) {
   return (
     <div className="stack lg">
       <div className="row between wrap" style={{ gap: 16 }}>
-        <div className="row wrap" style={{ gap: 6 }}>
+        <div className="row wrap filter-chips" style={{ gap: 6 }}>
           <button className={'chip ' + (filter === 'all' ? 'active' : '')} onClick={() => setFilter('all')}>Все</button>
           {Object.entries(ACTIVITY_TYPES).map(([k, v]) => (
             <button key={k} className={'chip ' + (filter === k ? 'active' : '')} onClick={() => setFilter(k)}>
