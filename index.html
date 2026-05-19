@@ -166,8 +166,10 @@
 
   /* ---------- Main ---------- */
   .main {
-    padding: 32px 44px 100px;
-    max-width: 1400px;
+    padding: 32px clamp(24px, 4vw, 56px) 100px;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
   }
   .page-head {
     display: flex; align-items: flex-end; justify-content: space-between;
@@ -433,7 +435,8 @@
   .cal-dot.both { background: var(--both); }
 
   /* ---------- Tasks ---------- */
-  .task-list { display: flex; flex-direction: column; gap: 8px; }
+  .task-list { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+  @media (min-width: 940px) { .task-list { grid-template-columns: 1fr 1fr; } }
   .task {
     display: grid;
     grid-template-columns: auto 1fr auto auto;
@@ -463,6 +466,22 @@
     border-color: var(--ink);
     color: var(--surface);
   }
+  /* Dual per-person check-ins (Мария / Даниил) for shared tasks */
+  .checkin {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--border-strong);
+    background: var(--surface);
+    display: grid; place-items: center;
+    cursor: pointer;
+    font-weight: 700; font-size: 15px;
+    transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease;
+  }
+  .checkin:hover { transform: scale(1.07); }
+  .checkin.maria  { color: var(--maria);  border-color: var(--maria); }
+  .checkin.daniil { color: var(--daniil); border-color: var(--daniil); }
+  .checkin.maria.on  { background: var(--maria);  color: #fff; box-shadow: 0 2px 8px rgba(200,98,90,0.28); }
+  .checkin.daniil.on { background: var(--daniil); color: #fff; box-shadow: 0 2px 8px rgba(107,143,127,0.28); }
   .task-title { font-weight: 600; font-size: 14.5px; }
   .task-meta { font-size: 12.5px; color: var(--ink-muted); }
   .task-recur {

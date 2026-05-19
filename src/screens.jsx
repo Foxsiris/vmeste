@@ -248,19 +248,17 @@ function TasksScreen({ tasks, onToggle, onPartToggle, onAdd, onSelect }) {
         {list.map(t => (
           <div key={t.id} className={'task ' + (isDone(t) ? 'done' : '')}>
             {t.assignee === 'both' ? (
-              <div className="row" style={{ gap: 6 }}>
+              <div className="row" style={{ gap: 8 }}>
                 {['maria', 'daniil'].map(who => {
                   const on = who === 'maria' ? t.doneMaria : t.doneDaniil;
-                  const col = who === 'maria' ? 'var(--maria)' : 'var(--daniil)';
                   return (
                     <button
                       key={who}
-                      className="check"
-                      title={(who === 'maria' ? 'Мария' : 'Даниил') + (on ? ': отметил(а)' : ': ещё не отметил(а)')}
-                      style={on ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col }}
+                      className={'checkin ' + who + (on ? ' on' : '')}
+                      title={(who === 'maria' ? 'Мария' : 'Даниил') + (on ? ': отметил(а) — нажмите, чтобы снять' : ': ещё не отметил(а)')}
                       onClick={() => onPartToggle(t.id, who)}
                     >
-                      {on ? <Icon name="check" size={14} /> : <span style={{ fontSize: 11, fontWeight: 700 }}>{who === 'maria' ? 'М' : 'Д'}</span>}
+                      {on ? <Icon name="check" size={18} /> : (who === 'maria' ? 'М' : 'Д')}
                     </button>
                   );
                 })}
