@@ -687,6 +687,91 @@
     color: var(--ink-2);
   }
   .seg button.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+
+  /* ---------- Mobile top bar + drawer (hidden on desktop) ---------- */
+  .topbar { display: none; }
+  .nav-backdrop { display: none; }
+  .sidebar-close { display: none; }
+
+  /* ---------- Responsive: phones & small tablets ---------- */
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; }
+
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      padding: 0 10px 0 8px;
+      background: rgba(255, 250, 242, 0.92);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      z-index: 90;
+    }
+    .topbar-btn {
+      border: none; background: transparent; color: var(--ink);
+      display: grid; place-items: center; width: 42px; height: 42px;
+      border-radius: 11px; flex-shrink: 0;
+    }
+    .topbar-btn:active { background: var(--surface-2); }
+    .topbar-brand { display: flex; align-items: center; gap: 8px; }
+
+    /* sidebar becomes an off-canvas drawer */
+    .sidebar {
+      position: fixed; top: 0; left: 0;
+      height: 100vh; width: 286px; max-width: 86vw;
+      transform: translateX(-102%);
+      transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 120;
+      box-shadow: var(--shadow-lg);
+      padding-top: 20px;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-close {
+      display: grid; place-items: center;
+      position: absolute; top: 16px; right: 14px;
+      width: 36px; height: 36px; border-radius: 10px;
+      border: none; background: var(--surface-2); color: var(--ink-2);
+    }
+    .nav-backdrop.show {
+      display: block; position: fixed; inset: 0;
+      background: rgba(43, 35, 26, 0.42);
+      z-index: 110;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .main { padding: 74px 16px 92px; max-width: 100%; }
+    .page-head { margin-bottom: 20px; }
+    .page-head > .row { display: none; }            /* avatar now lives in the top bar */
+    .page-title { font-size: 27px; }
+    .page-sub { font-size: 13.5px; margin-top: 6px; }
+
+    /* collapse multi-column layouts */
+    .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 14px; }
+    .task-list { grid-template-columns: 1fr; }
+    .notes-grid { columns: 1; }
+    .stat-grid { grid-template-columns: 1fr 1fr; }
+    .media-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .ach-grid { grid-template-columns: 1fr 1fr; }
+
+    /* feed rows: actions drop to their own line */
+    .activity { grid-template-columns: 40px 1fr; gap: 12px; padding: 12px 14px; }
+    .activity-actions { grid-column: 1 / -1; justify-content: flex-end; }
+
+    /* calendar fits a narrow screen */
+    .cal-grid { gap: 4px; }
+    .cal-cell { min-height: 52px; padding: 5px; border-radius: 9px; }
+    .cal-month { font-size: 22px; }
+
+    .fab { bottom: 18px; right: 18px; }
+    .modal { padding: 22px; border-radius: 18px; }
+    .modal-overlay { padding: 12px; }
+    .seg { flex-wrap: wrap; }
+  }
+
+  @media (max-width: 430px) {
+    .stat-grid, .ach-grid, .media-grid { grid-template-columns: 1fr; }
+    .page-title { font-size: 24px; }
+  }
 </style>
 </head>
 <body>

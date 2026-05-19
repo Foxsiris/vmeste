@@ -31,6 +31,7 @@ function App() {
   const [detail, setDetail]         = useState(null); // { kind, item }
   const [confirm, setConfirm]       = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [navOpen, setNavOpen]       = useState(false); // mobile drawer
 
   // ---------- initial load from Supabase ----------
   const reload = async () => {
@@ -269,7 +270,25 @@ function App() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      <header className="topbar">
+        <button className="topbar-btn" onClick={() => setNavOpen(true)} aria-label="Открыть меню">
+          <Icon name="menu" size={22} />
+        </button>
+        <div className="topbar-brand">
+          <div className="brand-mark" style={{ width: 30, height: 30, fontSize: 18, borderRadius: 9 }}>в</div>
+          <span className="brand-name" style={{ fontSize: 16 }}>Вместе</span>
+        </div>
+        <button className="topbar-btn" style={{ width: 'auto', padding: '0 4px' }} onClick={() => setSettingsOpen(true)} aria-label="Настройки пары">
+          <Avatar who="both" />
+        </button>
+      </header>
+
+      <div className={'nav-backdrop' + (navOpen ? ' show' : '')} onClick={() => setNavOpen(false)}></div>
+
+      <aside className={'sidebar' + (navOpen ? ' open' : '')}>
+        <button className="sidebar-close" onClick={() => setNavOpen(false)} aria-label="Закрыть меню">
+          <Icon name="x" size={18} />
+        </button>
         <div className="brand">
           <div className="brand-mark">в</div>
           <div>
@@ -306,7 +325,7 @@ function App() {
             <button
               key={item.id}
               className={'nav-item ' + (screen === item.id ? 'active' : '')}
-              onClick={() => setScreen(item.id)}
+              onClick={() => { setScreen(item.id); setNavOpen(false); }}
             >
               <span className="icon"><Icon name={item.icon} size={17} /></span>
               <span>{item.label}</span>
