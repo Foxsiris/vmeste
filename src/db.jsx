@@ -14,6 +14,7 @@ const fromActivity = (r) => ({
 const fromTask = (r) => ({
   id: r.id, title: r.title, assignee: r.assignee,
   recur: r.recur, done: r.done, lastBy: r.last_by,
+  doneMaria: r.done_maria, doneDaniil: r.done_daniil,
 });
 const fromDate = (r) => ({
   id: r.id, title: r.title, desc: r.descr, by: r.actor,
@@ -22,8 +23,16 @@ const fromDate = (r) => ({
 const fromNote = (r) => ({ id: r.id, from: r.from_who, text: r.text, date: r.date });
 const fromMedia = (r) => ({
   id: r.id, type: r.type, title: r.title, author: r.author,
+  desc: r.descr || undefined,
+  ratingMaria: r.rating_maria || 0, ratingDaniil: r.rating_daniil || 0,
   rating: r.rating, date: r.date, status: r.status, cover: r.cover,
 });
+
+// average of the partners' ratings, counting only those who actually rated
+const avgRating = (rm, rd) => {
+  const rs = [rm, rd].filter(x => x > 0);
+  return rs.length ? Math.round(rs.reduce((a, b) => a + b, 0) / rs.length) : 0;
+};
 const fromAch = (r) => ({ id: r.id, name: r.name, desc: r.descr, icon: r.icon, unlocked: r.unlocked });
 const fromImportantDate = (r) => ({ id: r.id, label: r.label, when: r.when_text, icon: r.icon || '🎂' });
 
@@ -70,10 +79,15 @@ const DB = {
     const data = _check(await sb.from('tasks').insert({
       title: e.title, assignee: e.assignee, recur: e.recur,
       done: false, last_by: e.lastBy || null,
+      done_maria: false, done_daniil: false,
     }).select().single());
     return fromTask(data);
   },
   async setTaskDone(id, done) { _check(await sb.from('tasks').update({ done }).eq('id', id)); },
+  // For "both" tasks: each partner checks in independently; done = both checked
+  async setTaskParts(id, { doneMaria, doneDaniil, done }) {
+    _check(await sb.from('tasks').update({ done_maria: doneMaria, done_daniil: doneDaniil, done }).eq('id', id));
+  },
   async deleteTask(id) { _check(await sb.from('tasks').delete().eq('id', id)); },
 
   // ---------- date ideas ----------
@@ -98,13 +112,22 @@ const DB = {
 
   // ---------- media ----------
   async addMedia(e) {
+    const rm = e.ratingMaria || 0, rd = e.ratingDaniil || 0;
     const data = _check(await sb.from('media').insert({
-      type: e.type, title: e.title, author: e.author, rating: e.rating,
+      type: e.type, title: e.title, author: e.author, descr: e.desc || null,
+      rating_maria: rm, rating_daniil: rd, rating: avgRating(rm, rd),
       date: e.date, status: e.status, cover: e.cover,
     }).select().single());
     return fromMedia(data);
   },
-  async setMediaRating(id, rating) { _check(await sb.from('media').update({ rating }).eq('id', id)); },
+  // Update one partner's rating; keep the aggregate `rating` in sync
+  async setMediaRating(id, who, value, other) {
+    const rm = who === 'maria'  ? value : other;
+    const rd = who === 'daniil' ? value : other;
+    const patch = who === 'maria' ? { rating_maria: value } : { rating_daniil: value };
+    patch.rating = avgRating(rm, rd);
+    _check(await sb.from('media').update(patch).eq('id', id));
+  },
   async deleteMedia(id) { _check(await sb.from('media').delete().eq('id', id)); },
 
   // ---------- important dates ----------

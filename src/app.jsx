@@ -142,19 +142,44 @@ function App() {
     });
   };
 
-  const onMediaRate = (id, rating) => {
-    setMedia(prev => prev.map(m => m.id === id ? { ...m, rating } : m));
-    setDetail(prev => prev && prev.kind === 'media' ? { kind: 'media', item: { ...prev.item, rating } } : prev);
-    DB.setMediaRating(id, rating).catch(fail);
+  const onMediaRate = (id, who, value) => {
+    const m = media.find(x => x.id === id);
+    if (!m) return;
+    const ratingMaria  = who === 'maria'  ? value : m.ratingMaria;
+    const ratingDaniil = who === 'daniil' ? value : m.ratingDaniil;
+    const other = who === 'maria' ? m.ratingDaniil : m.ratingMaria;
+    const next = { ...m, ratingMaria, ratingDaniil };
+    setMedia(prev => prev.map(x => x.id === id ? next : x));
+    setDetail(prev => (prev && prev.kind === 'media' && prev.item.id === id) ? { kind: 'media', item: next } : prev);
+    DB.setMediaRating(id, who, value, other).catch(fail);
   };
 
   const onTaskToggle = (id) => {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
-    const done = !t.done;
-    if (done) setToast('Готово!');
-    setTasks(prev => prev.map(x => x.id === id ? { ...x, done } : x));
-    DB.setTaskDone(id, done).catch(fail);
+    if (t.assignee === 'both') {
+      const v = !(t.doneMaria && t.doneDaniil);
+      if (v) setToast('Готово!');
+      setTasks(prev => prev.map(x => x.id === id ? { ...x, doneMaria: v, doneDaniil: v, done: v } : x));
+      DB.setTaskParts(id, { doneMaria: v, doneDaniil: v, done: v }).catch(fail);
+    } else {
+      const done = !t.done;
+      if (done) setToast('Готово!');
+      setTasks(prev => prev.map(x => x.id === id ? { ...x, done } : x));
+      DB.setTaskDone(id, done).catch(fail);
+    }
+  };
+
+  // "Both" tasks: each partner checks in independently; done when both have
+  const onTaskPartToggle = (id, who) => {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    const doneMaria  = who === 'maria'  ? !t.doneMaria  : t.doneMaria;
+    const doneDaniil = who === 'daniil' ? !t.doneDaniil : t.doneDaniil;
+    const done = doneMaria && doneDaniil;
+    if (done && !(t.doneMaria && t.doneDaniil)) setToast('Оба отметили — готово! 🎉');
+    setTasks(prev => prev.map(x => x.id === id ? { ...x, doneMaria, doneDaniil, done } : x));
+    DB.setTaskParts(id, { doneMaria, doneDaniil, done }).catch(fail);
   };
 
   const onDateAccept = (id) => {
@@ -315,7 +340,7 @@ function App() {
 
         {screen === 'feed'     && <FeedScreen     activities={activities} onLike={onLike} onDelete={onDelete} onSelect={(item) => setDetail({ kind: 'activity', item })} />}
         {screen === 'calendar' && <CalendarScreen activities={activities} onSelectDay={(date, events) => setDayOpen({ date, events })} />}
-        {screen === 'tasks'    && <TasksScreen    tasks={tasks} onToggle={onTaskToggle} onAdd={() => openAdd('task')} onSelect={(item) => setDetail({ kind: 'task', item })} />}
+        {screen === 'tasks'    && <TasksScreen    tasks={tasks} onToggle={onTaskToggle} onPartToggle={onTaskPartToggle} onAdd={() => openAdd('task')} onSelect={(item) => setDetail({ kind: 'task', item })} />}
         {screen === 'dates'    && <DatesScreen    dates={dates} onAccept={onDateAccept} onDecline={onDateDecline} onAdd={() => openAdd('date')} />}
         {screen === 'stats'    && <StatsScreen    activities={activities} />}
         {screen === 'ach'      && <AchievementsScreen achievements={achievements} onSelect={(item) => setDetail({ kind: 'ach', item })} />}
@@ -400,11 +425,14 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
   // media fields
   const [mediaType, setMediaType] = useState('movie');
   const [mediaAuthor, setMediaAuthor] = useState('');
-  const [mediaRating, setMediaRating] = useState(5);
+  const [mediaDesc, setMediaDesc] = useState('');
+  const [mediaRatingMaria, setMediaRatingMaria]   = useState(5);
+  const [mediaRatingDaniil, setMediaRatingDaniil] = useState(5);
 
   useEffect(() => {
     if (open) {
       setTitle(''); setNote(''); setDateWhen(''); setMediaAuthor('');
+      setMediaDesc(''); setMediaRatingMaria(5); setMediaRatingDaniil(5);
     }
   }, [open, mode]);
 
@@ -423,7 +451,9 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
         type: mediaType,
         title: title.trim(),
         author: mediaAuthor.trim() || '—',
-        rating: mediaRating,
+        desc: mediaDesc.trim() || undefined,
+        ratingMaria: mediaRatingMaria,
+        ratingDaniil: mediaRatingDaniil,
         date: iso(TODAY),
         status: 'watched',
         cover: title.trim().charAt(0).toUpperCase(),
@@ -589,17 +619,29 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
             <input className="input" value={mediaAuthor} onChange={e => setMediaAuthor(e.target.value)} placeholder={mediaType === 'book' ? 'Харуки Мураками' : 'Дени Вильнёв'} />
           </div>
           <div>
-            <label className="label">Оценка</label>
-            <div className="row" style={{ gap: 4 }}>
-              {[1,2,3,4,5].map(n => (
-                <button
-                  key={n}
-                  className="icon-btn"
-                  style={{ color: n <= mediaRating ? 'var(--gold)' : 'var(--border-strong)' }}
-                  onClick={() => setMediaRating(n)}
-                >
-                  <Icon name="star" size={22} />
-                </button>
+            <label className="label">Описание</label>
+            <textarea className="textarea" value={mediaDesc} onChange={e => setMediaDesc(e.target.value)} placeholder="О чём это, почему стоит посмотреть / прочитать…" />
+          </div>
+          <div>
+            <label className="label">Оценки — каждый свою</label>
+            <div className="stack sm">
+              {[['maria', 'Мария', mediaRatingMaria, setMediaRatingMaria], ['daniil', 'Даниил', mediaRatingDaniil, setMediaRatingDaniil]].map(([who, name, val, setVal]) => (
+                <div key={who} className="row" style={{ gap: 10 }}>
+                  <Avatar who={who} size="sm" />
+                  <span style={{ fontSize: 13, fontWeight: 600, width: 58 }}>{name}</span>
+                  <div className="row" style={{ gap: 2 }}>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button
+                        key={n}
+                        className="icon-btn"
+                        style={{ color: n <= val ? 'var(--gold)' : 'var(--border-strong)' }}
+                        onClick={() => setVal(n)}
+                      >
+                        <Icon name="star" size={22} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

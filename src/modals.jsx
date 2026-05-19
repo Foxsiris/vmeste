@@ -230,26 +230,38 @@ function MediaDetailModal({ item, onClose, onDelete, onRate }) {
               {item.date && <span className="muted" style={{ fontSize: 12.5 }}>{fmtDateLong(item.date)}</span>}
             </div>
           </div>
+          {item.desc && (
+            <div>
+              <div className="label">Описание</div>
+              <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>{item.desc}</div>
+            </div>
+          )}
           {item.status === 'watched' && (
             <div>
-              <div className="label">Наша оценка</div>
-              <div className="row" style={{ gap: 4 }}>
-                {[1,2,3,4,5].map(n => (
-                  <button
-                    key={n}
-                    className="icon-btn"
-                    style={{ color: n <= item.rating ? 'var(--gold)' : 'var(--border-strong)' }}
-                    onClick={() => onRate(item.id, n)}
-                  >
-                    <Icon name="star" size={20} />
-                  </button>
+              <div className="label">Оценки — каждый свою</div>
+              <div className="stack sm">
+                {[['maria', 'Мария', item.ratingMaria], ['daniil', 'Даниил', item.ratingDaniil]].map(([who, name, val]) => (
+                  <div key={who} className="row" style={{ gap: 10 }}>
+                    <Avatar who={who} size="sm" />
+                    <span style={{ fontSize: 13, fontWeight: 600, width: 58 }}>{name}</span>
+                    <div className="row" style={{ gap: 2 }}>
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <button
+                          key={n}
+                          className="icon-btn"
+                          title={`${name}: ${n}`}
+                          style={{ color: n <= val ? 'var(--gold)' : 'var(--border-strong)' }}
+                          onClick={() => onRate(item.id, who, n)}
+                        >
+                          <Icon name="star" size={20} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
           )}
-          <div className="muted" style={{ fontSize: 12.5, padding: 10, background: 'var(--bg-soft)', borderRadius: 10 }}>
-            💡 Это уже {item.type === 'movie' ? 'двадцать второй' : 'девятый'} {typeLabel.toLowerCase()} в вашем общем списке.
-          </div>
         </div>
       </div>
     </Modal>

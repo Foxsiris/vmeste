@@ -221,10 +221,11 @@ function CalendarScreen({ activities, onSelectDay }) {
 /* =========================================================
    TASKS — household chores list
    ========================================================= */
-function TasksScreen({ tasks, onToggle, onAdd, onSelect }) {
+function TasksScreen({ tasks, onToggle, onPartToggle, onAdd, onSelect }) {
   const [view, setView] = useScState('open');
-  const open = tasks.filter(t => !t.done);
-  const done = tasks.filter(t => t.done);
+  const isDone = (t) => t.assignee === 'both' ? (t.doneMaria && t.doneDaniil) : t.done;
+  const open = tasks.filter(t => !isDone(t));
+  const done = tasks.filter(t => isDone(t));
   const list = view === 'open' ? open : done;
   return (
     <div className="stack lg">
@@ -245,14 +246,37 @@ function TasksScreen({ tasks, onToggle, onAdd, onSelect }) {
           </div>
         )}
         {list.map(t => (
-          <div key={t.id} className={'task ' + (t.done ? 'done' : '')}>
-            <button className={'check ' + (t.done ? 'done' : '')} onClick={() => onToggle(t.id)}>
-              <Icon name="check" size={14} />
-            </button>
+          <div key={t.id} className={'task ' + (isDone(t) ? 'done' : '')}>
+            {t.assignee === 'both' ? (
+              <div className="row" style={{ gap: 6 }}>
+                {['maria', 'daniil'].map(who => {
+                  const on = who === 'maria' ? t.doneMaria : t.doneDaniil;
+                  const col = who === 'maria' ? 'var(--maria)' : 'var(--daniil)';
+                  return (
+                    <button
+                      key={who}
+                      className="check"
+                      title={(who === 'maria' ? 'Мария' : 'Даниил') + (on ? ': отметил(а)' : ': ещё не отметил(а)')}
+                      style={on ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col }}
+                      onClick={() => onPartToggle(t.id, who)}
+                    >
+                      {on ? <Icon name="check" size={14} /> : <span style={{ fontSize: 11, fontWeight: 700 }}>{who === 'maria' ? 'М' : 'Д'}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <button className={'check ' + (t.done ? 'done' : '')} onClick={() => onToggle(t.id)}>
+                <Icon name="check" size={14} />
+              </button>
+            )}
             <div>
               <div className="task-title">{t.title}</div>
               <div className="task-meta">
-                {t.recur} {t.lastBy && <>· последний раз {t.lastBy === 'maria' ? 'Мария' : 'Даниил'}</>}
+                {t.recur}
+                {t.assignee === 'both'
+                  ? ' · оба отмечают'
+                  : (t.lastBy ? <> · последний раз {t.lastBy === 'maria' ? 'Мария' : 'Даниил'}</> : null)}
               </div>
             </div>
             <div>
@@ -578,7 +602,20 @@ function MediaScreen({ media, onAdd, onSelect }) {
             <div className="media-body">
               <div className="media-title">{m.title}</div>
               <div className="media-meta">{m.author}</div>
-              {m.status === 'watched' && <Stars value={m.rating} />}
+              {m.desc && <div className="media-desc">{m.desc}</div>}
+              {m.status === 'watched' && (() => {
+                const rs = [m.ratingMaria, m.ratingDaniil].filter(x => x > 0);
+                const avg = rs.length ? Math.round(rs.reduce((a, b) => a + b, 0) / rs.length) : 0;
+                return (
+                  <div className="stack" style={{ gap: 5 }}>
+                    <Stars value={avg} />
+                    <div className="row" style={{ gap: 10, fontSize: 11 }}>
+                      <span style={{ color: 'var(--maria-ink)', fontWeight: 700 }}>Мария {m.ratingMaria || '—'}</span>
+                      <span style={{ color: 'var(--daniil-ink)', fontWeight: 700 }}>Даниил {m.ratingDaniil || '—'}</span>
+                    </div>
+                  </div>
+                );
+              })()}
               {m.status === 'reading' && <span className="pill"><span className="dot"></span>Читаем</span>}
               {m.status === 'planned' && <span className="pill"><span className="dot"></span>В планах</span>}
               {m.date && <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>{fmtDateLong(m.date)}</div>}
