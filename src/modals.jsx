@@ -257,10 +257,18 @@ function MediaDetailModal({ item, onClose, onDelete, onRate }) {
 }
 
 /* ---------- Couple / profile settings ---------- */
-function CoupleSettingsModal({ open, onClose }) {
+function CoupleSettingsModal({ open, onClose, importantDates = [], onAddDate, onDeleteDate }) {
   const [mariaName, setMariaName]   = useMState('Мария');
   const [daniilName, setDaniilName] = useMState('Даниил');
   const [anniversary, setAnniversary] = useMState('2023-09-14');
+  const [adding, setAdding]     = useMState(false);
+  const [newLabel, setNewLabel] = useMState('');
+  const [newWhen, setNewWhen]   = useMState('');
+  const saveDate = () => {
+    if (!newLabel.trim() || !newWhen.trim()) return;
+    onAddDate && onAddDate({ label: newLabel.trim(), when: newWhen.trim(), icon: '🎂' });
+    setNewLabel(''); setNewWhen(''); setAdding(false);
+  };
   return (
     <Modal
       open={open}
@@ -301,19 +309,35 @@ function CoupleSettingsModal({ open, onClose }) {
         <div>
           <label className="label">Важные даты</label>
           <div className="stack sm">
-            <div className="row" style={{ padding: 10, background: 'var(--surface-2)', borderRadius: 10, gap: 10 }}>
-              <span style={{ fontSize: 18 }}>🎂</span>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>День рождения Марии</span>
-              <span className="muted" style={{ fontSize: 12, marginLeft: 'auto' }}>3 марта</span>
-            </div>
-            <div className="row" style={{ padding: 10, background: 'var(--surface-2)', borderRadius: 10, gap: 10 }}>
-              <span style={{ fontSize: 18 }}>🎂</span>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>День рождения Даниила</span>
-              <span className="muted" style={{ fontSize: 12, marginLeft: 'auto' }}>18 ноября</span>
-            </div>
-            <button className="btn sm ghost" style={{ alignSelf: 'flex-start' }}>
-              <Icon name="plus" size={12} /> Добавить дату
-            </button>
+            {importantDates.length === 0 && (
+              <div className="muted" style={{ fontSize: 12.5 }}>Пока нет важных дат.</div>
+            )}
+            {importantDates.map(d => (
+              <div key={d.id} className="row" style={{ padding: 10, background: 'var(--surface-2)', borderRadius: 10, gap: 10 }}>
+                <span style={{ fontSize: 18 }}>{d.icon}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>{d.label}</span>
+                <span className="muted" style={{ fontSize: 12, marginLeft: 'auto' }}>{d.when}</span>
+                {onDeleteDate && (
+                  <button className="icon-btn" title="Удалить" style={{ width: 26, height: 26 }} onClick={() => onDeleteDate(d.id)}>
+                    <Icon name="x" size={13} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {adding ? (
+              <div className="stack sm" style={{ padding: 10, background: 'var(--surface-2)', borderRadius: 10 }}>
+                <input className="input" value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Например: Годовщина свадьбы" autoFocus />
+                <div className="row" style={{ gap: 8 }}>
+                  <input className="input" value={newWhen} onChange={e => setNewWhen(e.target.value)} placeholder="7 июля" />
+                  <button className="btn primary sm" onClick={saveDate} disabled={!newLabel.trim() || !newWhen.trim()}>Сохранить</button>
+                  <button className="btn sm" onClick={() => { setAdding(false); setNewLabel(''); setNewWhen(''); }}>Отмена</button>
+                </div>
+              </div>
+            ) : (
+              <button className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setAdding(true)}>
+                <Icon name="plus" size={12} /> Добавить дату
+              </button>
+            )}
           </div>
         </div>
         <div>

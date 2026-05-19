@@ -25,27 +25,30 @@ const fromMedia = (r) => ({
   rating: r.rating, date: r.date, status: r.status, cover: r.cover,
 });
 const fromAch = (r) => ({ id: r.id, name: r.name, desc: r.descr, icon: r.icon, unlocked: r.unlocked });
+const fromImportantDate = (r) => ({ id: r.id, label: r.label, when: r.when_text, icon: r.icon || '🎂' });
 
 const _check = (res) => { if (res.error) throw res.error; return res.data; };
 
 const DB = {
   // ---------- bulk load ----------
   async loadAll() {
-    const [a, t, d, n, m, ac] = await Promise.all([
+    const [a, t, d, n, m, ac, id] = await Promise.all([
       sb.from('activities').select('*').order('date', { ascending: false }).order('id', { ascending: false }),
       sb.from('tasks').select('*').order('id', { ascending: false }),
       sb.from('date_ideas').select('*').order('id', { ascending: false }),
       sb.from('notes').select('*').order('date', { ascending: false }).order('id', { ascending: false }),
       sb.from('media').select('*').order('id', { ascending: true }),
       sb.from('achievements').select('*').order('sort_order', { ascending: true }),
+      sb.from('important_dates').select('*').order('id', { ascending: true }),
     ]);
     return {
-      activities:   _check(a).map(fromActivity),
-      tasks:        _check(t).map(fromTask),
-      dates:        _check(d).map(fromDate),
-      notes:        _check(n).map(fromNote),
-      media:        _check(m).map(fromMedia),
-      achievements: _check(ac).map(fromAch),
+      activities:     _check(a).map(fromActivity),
+      tasks:          _check(t).map(fromTask),
+      dates:          _check(d).map(fromDate),
+      notes:          _check(n).map(fromNote),
+      media:          _check(m).map(fromMedia),
+      achievements:   _check(ac).map(fromAch),
+      importantDates: _check(id).map(fromImportantDate),
     };
   },
 
@@ -103,6 +106,15 @@ const DB = {
   },
   async setMediaRating(id, rating) { _check(await sb.from('media').update({ rating }).eq('id', id)); },
   async deleteMedia(id) { _check(await sb.from('media').delete().eq('id', id)); },
+
+  // ---------- important dates ----------
+  async addImportantDate(e) {
+    const data = _check(await sb.from('important_dates').insert({
+      label: e.label, when_text: e.when, icon: e.icon || '🎂',
+    }).select().single());
+    return fromImportantDate(data);
+  },
+  async deleteImportantDate(id) { _check(await sb.from('important_dates').delete().eq('id', id)); },
 };
 
 window.DB = DB;

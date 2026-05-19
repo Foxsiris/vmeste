@@ -21,6 +21,7 @@ function App() {
   const [notes, setNotes]           = useState([]);
   const [media, setMedia]           = useState([]);
   const [achievements, setAch]      = useState([]);
+  const [importantDates, setImportantDates] = useState([]);
   const [loading, setLoading]       = useState(true);
   const [loadError, setLoadError]   = useState(null);
   const [toast, setToast]           = useState('');
@@ -42,6 +43,7 @@ function App() {
       setNotes(all.notes);
       setMedia(all.media);
       setAch(all.achievements);
+      setImportantDates(all.importantDates);
     } catch (e) {
       setLoadError(e.message || String(e));
     } finally {
@@ -171,6 +173,19 @@ function App() {
         DB.deleteDate(id).catch(fail);
       },
     });
+  };
+
+  const onAddImportantDate = async (e) => {
+    try {
+      const row = await DB.addImportantDate(e);
+      setImportantDates(prev => [...prev, row]);
+      setToast('Дата добавлена');
+    } catch (err) { fail(err); }
+  };
+  const onDeleteImportantDate = (id) => {
+    setImportantDates(prev => prev.filter(d => d.id !== id));
+    setToast('Дата удалена');
+    DB.deleteImportantDate(id).catch(fail);
   };
 
   const openAdd = (mode = 'activity') => { setAddMode(mode); setAddOpen(true); };
@@ -350,7 +365,13 @@ function App() {
         onRate={onMediaRate}
       />
 
-      <CoupleSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <CoupleSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        importantDates={importantDates}
+        onAddDate={onAddImportantDate}
+        onDeleteDate={onDeleteImportantDate}
+      />
       <ConfirmModal confirm={confirm} onClose={() => setConfirm(null)} />
 
       <Toast message={toast} onDone={() => setToast('')} />
