@@ -19,6 +19,7 @@ const fromTask = (r) => ({
 const fromDate = (r) => ({
   id: r.id, title: r.title, desc: r.descr, by: r.actor,
   status: r.status, when: r.when_text, tag: r.tag,
+  eventDate: r.event_date, eventTime: r.event_time || undefined,
 });
 const fromNote = (r) => ({ id: r.id, from: r.from_who, text: r.text, date: r.date });
 const fromMedia = (r) => ({
@@ -95,6 +96,7 @@ const DB = {
     const data = _check(await sb.from('date_ideas').insert({
       title: e.title, descr: e.desc, actor: e.by,
       status: 'pending', when_text: e.when, tag: e.tag,
+      event_date: e.eventDate || null, event_time: e.eventTime || null,
     }).select().single());
     return fromDate(data);
   },

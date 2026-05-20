@@ -52,10 +52,18 @@ function groupByDay(items) {
   items.forEach(it => { (groups[it.date] = groups[it.date] || []).push(it); });
   return Object.entries(groups).sort((a,b) => b[0].localeCompare(a[0]));
 }
+// Human "when" label from a picked date (+ optional time): "Сб, 24 мая, 19:00"
+function fmtWhen(iso, time) {
+  if (!iso) return time || 'Дата уточняется';
+  const d = new Date(iso);
+  const dow = DOW_RU[(d.getUTCDay() + 6) % 7];
+  const base = `${dow}, ${d.getUTCDate()} ${MONTHS_RU_LOC[d.getUTCMonth()]}`;
+  return time ? `${base}, ${time}` : base;
+}
 
 Object.assign(window, {
   TODAY, iso, daysAgo,
   ACTIVITY_TYPES, COUPLE,
   MONTHS_RU, MONTHS_RU_LOC, DOW_RU,
-  fmtDateLong, fmtRelative, groupByDay,
+  fmtDateLong, fmtRelative, groupByDay, fmtWhen,
 });

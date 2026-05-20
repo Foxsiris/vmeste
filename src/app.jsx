@@ -358,7 +358,7 @@ function App() {
         </div>
 
         {screen === 'feed'     && <FeedScreen     activities={activities} onLike={onLike} onDelete={onDelete} onSelect={(item) => setDetail({ kind: 'activity', item })} />}
-        {screen === 'calendar' && <CalendarScreen activities={activities} onSelectDay={(date, events) => setDayOpen({ date, events })} />}
+        {screen === 'calendar' && <CalendarScreen activities={activities} dates={dates} onSelectDay={(date, events) => setDayOpen({ date, events })} />}
         {screen === 'tasks'    && <TasksScreen    tasks={tasks} onToggle={onTaskToggle} onPartToggle={onTaskPartToggle} onAdd={() => openAdd('task')} onSelect={(item) => setDetail({ kind: 'task', item })} />}
         {screen === 'dates'    && <DatesScreen    dates={dates} onAccept={onDateAccept} onDecline={onDateDecline} onAdd={() => openAdd('date')} />}
         {screen === 'stats'    && <StatsScreen    activities={activities} />}
@@ -435,7 +435,8 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
   const [taskRecur, setTaskRecur] = useState('Раз в неделю');
 
   // date fields
-  const [dateWhen, setDateWhen] = useState('');
+  const [dateDate, setDateDate] = useState('');
+  const [dateTime, setDateTime] = useState('');
   const [dateTag, setDateTag] = useState('Романтика');
 
   // note fields
@@ -450,7 +451,7 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
 
   useEffect(() => {
     if (open) {
-      setTitle(''); setNote(''); setDateWhen(''); setMediaAuthor('');
+      setTitle(''); setNote(''); setDateDate(''); setDateTime(''); setMediaAuthor('');
       setMediaDesc(''); setMediaRatingMaria(5); setMediaRatingDaniil(5);
     }
   }, [open, mode]);
@@ -462,7 +463,15 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
     } else if (mode === 'task') {
       onSubmit({ title: title.trim(), assignee: taskAssignee, recur: taskRecur, lastBy: null });
     } else if (mode === 'date') {
-      onSubmit({ title: title.trim(), desc: note.trim() || 'Без описания', by, when: dateWhen || 'Дата уточняется', tag: dateTag });
+      onSubmit({
+        title: title.trim(),
+        desc: note.trim() || 'Без описания',
+        by,
+        when: fmtWhen(dateDate, dateTime),
+        eventDate: dateDate || null,
+        eventTime: dateTime || null,
+        tag: dateTag,
+      });
     } else if (mode === 'note') {
       onSubmit({ from: noteFrom, text: title.trim() });
     } else if (mode === 'media') {
@@ -578,20 +587,24 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
           </div>
           <div className="grid-2">
             <div>
-              <label className="label">Когда</label>
-              <input className="input" value={dateWhen} onChange={e => setDateWhen(e.target.value)} placeholder="Сб, 24 мая, 19:00" />
+              <label className="label">Дата</label>
+              <input className="input" type="date" value={dateDate} onChange={e => setDateDate(e.target.value)} />
             </div>
             <div>
-              <label className="label">Тип</label>
-              <select className="select" value={dateTag} onChange={e => setDateTag(e.target.value)}>
-                <option>Романтика</option>
-                <option>Активно</option>
-                <option>Культура</option>
-                <option>Творчество</option>
-                <option>Уют</option>
-                <option>Еда</option>
-              </select>
+              <label className="label">Время (необязательно)</label>
+              <input className="input" type="time" value={dateTime} onChange={e => setDateTime(e.target.value)} />
             </div>
+          </div>
+          <div>
+            <label className="label">Тип</label>
+            <select className="select" value={dateTag} onChange={e => setDateTag(e.target.value)}>
+              <option>Романтика</option>
+              <option>Активно</option>
+              <option>Культура</option>
+              <option>Творчество</option>
+              <option>Уют</option>
+              <option>Еда</option>
+            </select>
           </div>
           <div>
             <label className="label">От кого</label>

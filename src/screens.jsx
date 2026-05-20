@@ -105,10 +105,18 @@ function ActivityCard({ activity: a, onLike, onDelete, onSelect }) {
 /* =========================================================
    CALENDAR — month grid, navigable
    ========================================================= */
-function CalendarScreen({ activities, onSelectDay }) {
+function CalendarScreen({ activities, dates = [], onSelectDay }) {
   const [cursor, setCursor] = useScState(() => {
     const d = new Date(TODAY); d.setDate(1); return d;
   });
+
+  // Proposed/accepted dates with a picked day appear on the calendar
+  const dateEvents = useScMemo(() => (dates || [])
+    .filter(d => d.eventDate)
+    .map(d => ({
+      id: 'date-' + d.id, type: 'date', by: d.by, date: d.eventDate,
+      title: d.title, icon: '💞', note: d.when, isDate: true, status: d.status,
+    })), [dates]);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -124,9 +132,9 @@ function CalendarScreen({ activities, onSelectDay }) {
 
   const eventsByDay = useScMemo(() => {
     const map = {};
-    activities.forEach(a => { (map[a.date] = map[a.date] || []).push(a); });
+    [...activities, ...dateEvents].forEach(a => { (map[a.date] = map[a.date] || []).push(a); });
     return map;
-  }, [activities]);
+  }, [activities, dateEvents]);
 
   const monthActs = activities.filter(a => {
     const d = new Date(a.date); return d.getFullYear() === year && d.getMonth() === month;
