@@ -695,7 +695,7 @@
 
   /* ---------- Responsive: phones & small tablets ---------- */
   @media (max-width: 860px) {
-    .app { grid-template-columns: 1fr; }
+    .app { display: block; }   /* drop the 260px+1fr grid; main becomes a full-width block */
 
     .topbar {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
