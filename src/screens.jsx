@@ -120,8 +120,7 @@ function CalendarScreen({ activities, dates = [], onSelectDay }) {
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const startDow = (firstDay.getDay() + 6) % 7; // monday=0
+  const startDow = (new Date(Date.UTC(year, month, 1)).getUTCDay() + 6) % 7; // monday=0
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const cells = [];
@@ -167,7 +166,7 @@ function CalendarScreen({ activities, dates = [], onSelectDay }) {
         <div className="cal-grid">
           {cells.map((d, i) => {
             if (d === null) return <div key={'e'+i} className="cal-cell empty"></div>;
-            const dayIso = iso(new Date(year, month, d));
+            const dayIso = iso(new Date(Date.UTC(year, month, d)));
             const evts = eventsByDay[dayIso] || [];
             const isToday = dayIso === todayIso;
             return (
