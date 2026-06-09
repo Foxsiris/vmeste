@@ -34,15 +34,23 @@ const avgRating = (rm, rd) => {
   const rs = [rm, rd].filter(x => x > 0);
   return rs.length ? Math.round(rs.reduce((a, b) => a + b, 0) / rs.length) : 0;
 };
-const fromAch = (r) => ({ id: r.id, name: r.name, desc: r.descr, icon: r.icon, unlocked: r.unlocked });
+const fromAch = (r) => ({
+  id: r.id, name: r.name, desc: r.descr, icon: r.icon,
+  unlocked: r.unlocked, progress: r.progress || 0,
+  unlockedAt: r.unlocked_at || undefined,
+});
 const fromImportantDate = (r) => ({ id: r.id, label: r.label, when: r.when_text, icon: r.icon || '🎂' });
+const fromSettings = (r) => ({
+  mariaName: r.maria_name, daniilName: r.daniil_name, anniversary: r.anniversary,
+});
+const fromCompletion = (r) => ({ id: r.id, taskId: r.task_id, by: r.actor, date: r.done_on });
 
 const _check = (res) => { if (res.error) throw res.error; return res.data; };
 
 const DB = {
   // ---------- bulk load ----------
   async loadAll() {
-    const [a, t, d, n, m, ac, id] = await Promise.all([
+    const [a, t, d, n, m, ac, id, st, tc] = await Promise.all([
       sb.from('activities').select('*').order('date', { ascending: false }).order('id', { ascending: false }),
       sb.from('tasks').select('*').order('id', { ascending: false }),
       sb.from('date_ideas').select('*').order('id', { ascending: false }),
@@ -50,6 +58,8 @@ const DB = {
       sb.from('media').select('*').order('id', { ascending: true }),
       sb.from('achievements').select('*').order('sort_order', { ascending: true }),
       sb.from('important_dates').select('*').order('id', { ascending: true }),
+      sb.from('couple_settings').select('*').eq('id', 1).maybeSingle(),
+      sb.from('task_completions').select('*').order('done_on', { ascending: false }).order('id', { ascending: false }),
     ]);
     return {
       activities:     _check(a).map(fromActivity),
@@ -59,6 +69,8 @@ const DB = {
       media:          _check(m).map(fromMedia),
       achievements:   _check(ac).map(fromAch),
       importantDates: _check(id).map(fromImportantDate),
+      settings:       st.error || !st.data ? null : fromSettings(st.data),
+      completions:    _check(tc).map(fromCompletion),
     };
   },
 
@@ -68,6 +80,13 @@ const DB = {
       type: e.type, actor: e.by, date: e.date, title: e.title,
       icon: e.icon || null, note: e.note || null, liked_by: [],
     }).select().single());
+    return fromActivity(data);
+  },
+  async updateActivity(id, e) {
+    const data = _check(await sb.from('activities').update({
+      type: e.type, actor: e.by, date: e.date, title: e.title,
+      icon: e.icon || null, note: e.note || null,
+    }).eq('id', id).select().single());
     return fromActivity(data);
   },
   async setActivityLikes(id, likedBy) {
@@ -84,12 +103,33 @@ const DB = {
     }).select().single());
     return fromTask(data);
   },
-  async setTaskDone(id, done) { _check(await sb.from('tasks').update({ done }).eq('id', id)); },
+  async updateTask(id, e) {
+    const data = _check(await sb.from('tasks').update({
+      title: e.title, assignee: e.assignee, recur: e.recur,
+    }).eq('id', id).select().single());
+    return fromTask(data);
+  },
+  async setTaskDone(id, done, lastBy) {
+    const patch = { done };
+    if (lastBy !== undefined) patch.last_by = lastBy;
+    _check(await sb.from('tasks').update(patch).eq('id', id));
+  },
   // For "both" tasks: each partner checks in independently; done = both checked
   async setTaskParts(id, { doneMaria, doneDaniil, done }) {
     _check(await sb.from('tasks').update({ done_maria: doneMaria, done_daniil: doneDaniil, done }).eq('id', id));
   },
   async deleteTask(id) { _check(await sb.from('tasks').delete().eq('id', id)); },
+
+  // ---------- task completion history ----------
+  async addTaskCompletion(taskId, by, date) {
+    const data = _check(await sb.from('task_completions').insert({
+      task_id: taskId, actor: by, done_on: date,
+    }).select().single());
+    return fromCompletion(data);
+  },
+  async deleteTaskCompletion(id) {
+    _check(await sb.from('task_completions').delete().eq('id', id));
+  },
 
   // ---------- date ideas ----------
   async addDate(e) {
@@ -100,6 +140,14 @@ const DB = {
     }).select().single());
     return fromDate(data);
   },
+  async updateDate(id, e) {
+    const data = _check(await sb.from('date_ideas').update({
+      title: e.title, descr: e.desc, actor: e.by,
+      when_text: e.when, tag: e.tag,
+      event_date: e.eventDate || null, event_time: e.eventTime || null,
+    }).eq('id', id).select().single());
+    return fromDate(data);
+  },
   async setDateStatus(id, status) { _check(await sb.from('date_ideas').update({ status }).eq('id', id)); },
   async deleteDate(id) { _check(await sb.from('date_ideas').delete().eq('id', id)); },
 
@@ -108,6 +156,12 @@ const DB = {
     const data = _check(await sb.from('notes').insert({
       from_who: e.from, text: e.text, date: e.date,
     }).select().single());
+    return fromNote(data);
+  },
+  async updateNote(id, e) {
+    const data = _check(await sb.from('notes').update({
+      from_who: e.from, text: e.text,
+    }).eq('id', id).select().single());
     return fromNote(data);
   },
   async deleteNote(id) { _check(await sb.from('notes').delete().eq('id', id)); },
@@ -122,6 +176,15 @@ const DB = {
     }).select().single());
     return fromMedia(data);
   },
+  async updateMedia(id, e) {
+    const rm = e.ratingMaria || 0, rd = e.ratingDaniil || 0;
+    const data = _check(await sb.from('media').update({
+      type: e.type, title: e.title, author: e.author, descr: e.desc || null,
+      rating_maria: rm, rating_daniil: rd, rating: avgRating(rm, rd),
+      status: e.status, cover: e.cover,
+    }).eq('id', id).select().single());
+    return fromMedia(data);
+  },
   // Update one partner's rating; keep the aggregate `rating` in sync
   async setMediaRating(id, who, value, other) {
     const rm = who === 'maria'  ? value : other;
@@ -131,6 +194,25 @@ const DB = {
     _check(await sb.from('media').update(patch).eq('id', id));
   },
   async deleteMedia(id) { _check(await sb.from('media').delete().eq('id', id)); },
+
+  // ---------- achievements ----------
+  async setAchievementUnlocked(id, unlocked, unlockedAt) {
+    _check(await sb.from('achievements').update({
+      unlocked, unlocked_at: unlocked ? unlockedAt : null,
+      progress: unlocked ? 100 : 0,
+    }).eq('id', id));
+  },
+  async setAchievementProgress(id, progress) {
+    _check(await sb.from('achievements').update({ progress }).eq('id', id));
+  },
+
+  // ---------- couple settings ----------
+  async saveSettings(s) {
+    const data = _check(await sb.from('couple_settings').upsert({
+      id: 1, maria_name: s.mariaName, daniil_name: s.daniilName, anniversary: s.anniversary,
+    }).select().single());
+    return fromSettings(data);
+  },
 
   // ---------- important dates ----------
   async addImportantDate(e) {

@@ -31,8 +31,8 @@ function FeedScreen({ activities, onLike, onDelete, onSelect }) {
         </div>
         <div className="seg">
           <button className={actor === 'all'    ? 'active' : ''} onClick={() => setActor('all')}>Все</button>
-          <button className={actor === 'maria'  ? 'active' : ''} onClick={() => setActor('maria')}>Мария</button>
-          <button className={actor === 'daniil' ? 'active' : ''} onClick={() => setActor('daniil')}>Даниил</button>
+          <button className={actor === 'maria'  ? 'active' : ''} onClick={() => setActor('maria')}>{COUPLE.maria.name}</button>
+          <button className={actor === 'daniil' ? 'active' : ''} onClick={() => setActor('daniil')}>{COUPLE.daniil.name}</button>
           <button className={actor === 'both'   ? 'active' : ''} onClick={() => setActor('both')}>Вместе</button>
         </div>
       </div>
@@ -200,8 +200,8 @@ function CalendarScreen({ activities, dates = [], onSelectDay }) {
           <div style={{ marginTop: 14 }}>
             <ProgressBar maria={byMaria} daniil={byDaniil} />
             <div className="row between" style={{ marginTop: 8, fontSize: 12.5 }}>
-              <span><span className="cal-dot maria" style={{ display: 'inline-block', marginRight: 6 }}></span>Мария — {byMaria}</span>
-              <span><span className="cal-dot daniil" style={{ display: 'inline-block', marginRight: 6 }}></span>Даниил — {byDaniil}</span>
+              <span><span className="cal-dot maria" style={{ display: 'inline-block', marginRight: 6 }}></span>{COUPLE.maria.name} — {byMaria}</span>
+              <span><span className="cal-dot daniil" style={{ display: 'inline-block', marginRight: 6 }}></span>{COUPLE.daniil.name} — {byDaniil}</span>
               <span><span className="cal-dot both" style={{ display: 'inline-block', marginRight: 6 }}></span>Вместе — {byBoth}</span>
             </div>
           </div>
@@ -262,10 +262,10 @@ function TasksScreen({ tasks, onToggle, onPartToggle, onAdd, onSelect }) {
                     <button
                       key={who}
                       className={'checkin ' + who + (on ? ' on' : '')}
-                      title={(who === 'maria' ? 'Мария' : 'Даниил') + (on ? ': отметил(а) — нажмите, чтобы снять' : ': ещё не отметил(а)')}
+                      title={COUPLE[who].name + (on ? ': отметил(а) — нажмите, чтобы снять' : ': ещё не отметил(а)')}
                       onClick={() => onPartToggle(t.id, who)}
                     >
-                      {on ? <Icon name="check" size={18} /> : (who === 'maria' ? 'М' : 'Д')}
+                      {on ? <Icon name="check" size={18} /> : COUPLE[who].initial}
                     </button>
                   );
                 })}
@@ -281,7 +281,7 @@ function TasksScreen({ tasks, onToggle, onPartToggle, onAdd, onSelect }) {
                 {t.recur}
                 {t.assignee === 'both'
                   ? ' · оба отмечают'
-                  : (t.lastBy ? <> · последний раз {t.lastBy === 'maria' ? 'Мария' : 'Даниил'}</> : null)}
+                  : (t.lastBy ? <> · последний раз {COUPLE[t.lastBy].name}</> : null)}
               </div>
             </div>
             <div>
@@ -306,7 +306,7 @@ function TasksScreen({ tasks, onToggle, onPartToggle, onAdd, onSelect }) {
 /* =========================================================
    DATES — proposed / accepted dates
    ========================================================= */
-function DatesScreen({ dates, onAccept, onDecline, onAdd }) {
+function DatesScreen({ dates, onAccept, onDecline, onAdd, onEdit, onDelete }) {
   const pending  = dates.filter(d => d.status === 'pending');
   const accepted = dates.filter(d => d.status === 'accepted');
   return (
@@ -315,6 +315,12 @@ function DatesScreen({ dates, onAccept, onDecline, onAdd }) {
         <div className="card-title" style={{ margin: 0 }}>Ожидают ответа · {pending.length}</div>
         <button className="btn primary sm" onClick={onAdd}><Icon name="plus" size={14} /> Предложить</button>
       </div>
+      {pending.length === 0 && (
+        <div className="card empty-state" style={{ padding: 28 }}>
+          <span className="serif">Нет открытых предложений</span>
+          Самое время предложить что-нибудь!
+        </div>
+      )}
       <div className="grid-2">
         {pending.map(d => (
           <div key={d.id} className="date-card pending">
@@ -330,14 +336,20 @@ function DatesScreen({ dates, onAccept, onDecline, onAdd }) {
             </div>
             <div className="date-desc">{d.desc}</div>
             <div className="date-meta">📅 {d.when}</div>
-            <div className="row" style={{ gap: 8, marginTop: 4 }}>
-              <button className="btn primary sm" onClick={() => onAccept(d.id)}>Принять</button>
-              <button className="btn sm" onClick={() => onDecline(d.id)}>Отклонить</button>
+            <div className="row between" style={{ marginTop: 4 }}>
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn primary sm" onClick={() => onAccept(d.id)}>Принять</button>
+                <button className="btn sm" onClick={() => onDecline(d.id)}>Отклонить</button>
+              </div>
+              <button className="icon-btn" title="Редактировать" onClick={() => onEdit(d)}><Icon name="edit" size={14} /></button>
             </div>
           </div>
         ))}
       </div>
       <div className="card-title" style={{ marginTop: 8 }}>Принятые · {accepted.length}</div>
+      {accepted.length === 0 && (
+        <div className="muted" style={{ fontSize: 13 }}>Принятых свиданий пока нет.</div>
+      )}
       <div className="grid-2">
         {accepted.map(d => (
           <div key={d.id} className="date-card accepted">
@@ -353,6 +365,10 @@ function DatesScreen({ dates, onAccept, onDecline, onAdd }) {
             </div>
             <div className="date-desc">{d.desc}</div>
             <div className="date-meta">📅 {d.when}</div>
+            <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+              <button className="icon-btn" title="Редактировать" onClick={() => onEdit(d)}><Icon name="edit" size={14} /></button>
+              <button className="icon-btn" title="Удалить" onClick={() => onDelete(d.id)}><Icon name="x" size={14} /></button>
+            </div>
           </div>
         ))}
       </div>
@@ -370,6 +386,12 @@ function StatsScreen({ activities }) {
     const diff = Math.round((TODAY - new Date(a.date)) / 86400000);
     return diff <= cutoff;
   });
+  // the same-length period right before the current one, for a real delta
+  const prevData = period === 'all' ? [] : activities.filter(a => {
+    const diff = Math.round((TODAY - new Date(a.date)) / 86400000);
+    return diff > cutoff && diff <= cutoff * 2;
+  });
+  const delta = data.length - prevData.length;
   const byType = {};
   Object.keys(ACTIVITY_TYPES).forEach(k => byType[k] = 0);
   data.forEach(a => byType[a.type]++);
@@ -405,13 +427,17 @@ function StatsScreen({ activities }) {
       <div className="stat-grid">
         <div className="stat-card">
           <div className="stat-value">{togetherYears}<span className="unit">года</span></div>
-          <div className="stat-label">Вместе с 14 сентября 2023</div>
-          <div className="stat-delta">{togetherDays} дней · {togetherMonths} мес</div>
+          <div className="stat-label">Вместе с {fmtDateFull(COUPLE.start)}</div>
+          <div className="stat-delta">{togetherDays} {plural(togetherDays, 'день', 'дня', 'дней')} · {togetherMonths} мес</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{data.length}<span className="unit">записей</span></div>
+          <div className="stat-value">{data.length}<span className="unit">{plural(data.length, 'запись', 'записи', 'записей')}</span></div>
           <div className="stat-label">за выбранный период</div>
-          <div className="stat-delta">+{Math.round(data.length * 0.18)} к прошлому периоду</div>
+          {period !== 'all' && (
+            <div className={'stat-delta' + (delta < 0 ? ' down' : '')}>
+              {delta >= 0 ? `+${delta}` : delta} к прошлому периоду
+            </div>
+          )}
         </div>
         <div className="stat-card">
           <div className="stat-value">{likes}<span className="unit">💌</span></div>
@@ -430,7 +456,7 @@ function StatsScreen({ activities }) {
           <div className="row" style={{ gap: 10 }}>
             <Avatar who="maria" size="sm" />
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>Мария</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{COUPLE.maria.name}</div>
               <div className="muted" style={{ fontSize: 12 }}>{byMaria} личных записей</div>
             </div>
           </div>
@@ -440,7 +466,7 @@ function StatsScreen({ activities }) {
           </div>
           <div className="row" style={{ gap: 10 }}>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>Даниил</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{COUPLE.daniil.name}</div>
               <div className="muted" style={{ fontSize: 12 }}>{byDaniil} личных записей</div>
             </div>
             <Avatar who="daniil" size="sm" />
@@ -499,7 +525,7 @@ function StatsScreen({ activities }) {
 /* =========================================================
    ACHIEVEMENTS — badges
    ========================================================= */
-function AchievementsScreen({ achievements, onSelect }) {
+function AchievementsScreen({ achievements, level, onSelect }) {
   const unlocked = achievements.filter(a => a.unlocked);
   const locked   = achievements.filter(a => !a.unlocked);
   return (
@@ -510,13 +536,16 @@ function AchievementsScreen({ achievements, onSelect }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, color: 'var(--ink-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Уровень пары</div>
             <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
-              Тёплый плед <span className="serif" style={{ color: 'var(--ink-muted)' }}>· уровень 4</span>
+              {level.name} <span className="serif" style={{ color: 'var(--ink-muted)' }}>· уровень {level.level}</span>
             </div>
             <div className="progress" style={{ marginTop: 10, height: 8 }}>
-              <div className="progress-fill both" style={{ width: '62%' }}></div>
+              <div className="progress-fill both" style={{ width: `${level.progress}%` }}></div>
             </div>
             <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-              До уровня «Уютный дом» ещё 38 благодарностей и 12 совместных вечеров
+              {level.next
+                ? <>До уровня «{level.next}» ещё {level.toNext} {plural(level.toNext, 'очко', 'очка', 'очков')} — записи, благодарности и бейджи приближают его</>
+                : 'Максимальный уровень — вы легенда!'}
+              {' '}· сейчас {level.points} {plural(level.points, 'очко', 'очка', 'очков')}
             </div>
           </div>
         </div>
@@ -563,6 +592,12 @@ function NotesScreen({ notes, onAdd, onSelect }) {
         </div>
         <button className="btn primary sm" onClick={onAdd}><Icon name="plus" size={14} /> Написать</button>
       </div>
+      {notes.length === 0 && (
+        <div className="card empty-state">
+          <span className="serif">Пока ни одной записки</span>
+          Напишите первую — приятные слова не бывают лишними.
+        </div>
+      )}
       <div className="notes-grid">
         {notes.map(n => (
           <div key={n.id} className={'note from-' + n.from} style={{ cursor: 'pointer' }} onClick={() => onSelect && onSelect(n)}>
@@ -600,6 +635,12 @@ function MediaScreen({ media, onAdd, onSelect }) {
         <button className="btn primary sm" onClick={onAdd}><Icon name="plus" size={14} /> Добавить</button>
       </div>
 
+      {filtered.length === 0 && (
+        <div className="card empty-state">
+          <span className="serif">Здесь пока пусто</span>
+          Добавьте первый фильм, сериал или книгу.
+        </div>
+      )}
       <div className="media-grid">
         {filtered.map(m => (
           <div key={m.id} className="media" style={{ cursor: 'pointer' }} onClick={() => onSelect && onSelect(m)}>
@@ -615,13 +656,13 @@ function MediaScreen({ media, onAdd, onSelect }) {
                   <div className="stack" style={{ gap: 5 }}>
                     <Stars value={avg} />
                     <div className="row" style={{ gap: 10, fontSize: 11 }}>
-                      <span style={{ color: 'var(--maria-ink)', fontWeight: 700 }}>Мария {m.ratingMaria || '—'}</span>
-                      <span style={{ color: 'var(--daniil-ink)', fontWeight: 700 }}>Даниил {m.ratingDaniil || '—'}</span>
+                      <span style={{ color: 'var(--maria-ink)', fontWeight: 700 }}>{COUPLE.maria.name} {m.ratingMaria || '—'}</span>
+                      <span style={{ color: 'var(--daniil-ink)', fontWeight: 700 }}>{COUPLE.daniil.name} {m.ratingDaniil || '—'}</span>
                     </div>
                   </div>
                 );
               })()}
-              {m.status === 'reading' && <span className="pill"><span className="dot"></span>Читаем</span>}
+              {m.status === 'reading' && <span className="pill"><span className="dot"></span>{m.type === 'book' ? 'Читаем' : 'Смотрим'}</span>}
               {m.status === 'planned' && <span className="pill"><span className="dot"></span>В планах</span>}
               {m.date && <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>{fmtDateLong(m.date)}</div>}
             </div>

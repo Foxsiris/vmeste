@@ -1,5 +1,5 @@
 // Main app — loads state from Supabase, persists every mutation, handles
-// navigation and the multi-mode add modal.
+// navigation and the multi-mode add/edit modal.
 const { useState, useEffect, useMemo } = React;
 
 const NAV = [
@@ -13,6 +13,8 @@ const NAV = [
   { id: 'media',     label: 'Фильмы и книги', icon: 'film' },
 ];
 
+const byDateDesc = (a, b) => String(b.date).localeCompare(String(a.date));
+
 function App() {
   const [screen, setScreen] = useState('feed');
   const [activities, setActivities] = useState([]);
@@ -22,11 +24,14 @@ function App() {
   const [media, setMedia]           = useState([]);
   const [achievements, setAch]      = useState([]);
   const [importantDates, setImportantDates] = useState([]);
+  const [completions, setCompletions] = useState([]);
+  const [settings, setSettings]     = useState(null);
   const [loading, setLoading]       = useState(true);
   const [loadError, setLoadError]   = useState(null);
   const [toast, setToast]           = useState('');
   const [addOpen, setAddOpen]       = useState(false);
   const [addMode, setAddMode]       = useState('activity');
+  const [editItem, setEditItem]     = useState(null); // item being edited (null = adding)
   const [dayOpen, setDayOpen]       = useState(null);
   const [detail, setDetail]         = useState(null); // { kind, item }
   const [confirm, setConfirm]       = useState(null);
@@ -45,6 +50,9 @@ function App() {
       setMedia(all.media);
       setAch(all.achievements);
       setImportantDates(all.importantDates);
+      setCompletions(all.completions);
+      applyCoupleSettings(all.settings);
+      setSettings(all.settings);
     } catch (e) {
       setLoadError(e.message || String(e));
     } finally {
@@ -74,6 +82,21 @@ function App() {
   };
 
   const fail = (e) => setToast('Ошибка: ' + (e.message || e));
+
+  // per-person record counts for the current month (sidebar)
+  const monthCounts = useMemo(() => {
+    const ym = iso(TODAY).slice(0, 7);
+    const inMonth = activities.filter(a => String(a.date).startsWith(ym));
+    return {
+      maria:  inMonth.filter(a => a.by === 'maria' || a.by === 'both').length,
+      daniil: inMonth.filter(a => a.by === 'daniil' || a.by === 'both').length,
+    };
+  }, [activities]);
+
+  const level = useMemo(
+    () => coupleLevel({ activities, notes, media, achievements }),
+    [activities, notes, media, achievements]
+  );
 
   // ---------- activities ----------
   const onLike = (id) => {
@@ -155,6 +178,20 @@ function App() {
     DB.setMediaRating(id, who, value, other).catch(fail);
   };
 
+  // ---------- tasks + completion history ----------
+  const recordCompletion = (taskId, by) => {
+    DB.addTaskCompletion(taskId, by, iso(TODAY))
+      .then(row => setCompletions(prev => [row, ...prev]))
+      .catch(fail);
+  };
+  const removeLatestCompletion = (taskId, by) => {
+    const last = completions.find(c => c.taskId === taskId && (!by || c.by === by));
+    if (!last) return null;
+    setCompletions(prev => prev.filter(c => c.id !== last.id));
+    DB.deleteTaskCompletion(last.id).catch(fail);
+    return last;
+  };
+
   const onTaskToggle = (id) => {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
@@ -163,11 +200,26 @@ function App() {
       if (v) setToast('Готово!');
       setTasks(prev => prev.map(x => x.id === id ? { ...x, doneMaria: v, doneDaniil: v, done: v } : x));
       DB.setTaskParts(id, { doneMaria: v, doneDaniil: v, done: v }).catch(fail);
+      if (v) { recordCompletion(id, 'maria'); recordCompletion(id, 'daniil'); }
+      else { removeLatestCompletion(id, 'maria'); removeLatestCompletion(id, 'daniil'); }
     } else {
       const done = !t.done;
-      if (done) setToast('Готово!');
-      setTasks(prev => prev.map(x => x.id === id ? { ...x, done } : x));
-      DB.setTaskDone(id, done).catch(fail);
+      // who did it: a personal task — its owner; a rotating one — whoever's turn it is
+      const actor = t.assignee === 'rotate'
+        ? (t.lastBy === 'maria' ? 'daniil' : 'maria')
+        : t.assignee;
+      if (done) {
+        setToast('Готово!');
+        setTasks(prev => prev.map(x => x.id === id ? { ...x, done, lastBy: actor } : x));
+        DB.setTaskDone(id, done, actor).catch(fail);
+        recordCompletion(id, actor);
+      } else {
+        const removed = removeLatestCompletion(id);
+        // restore whose turn it was before the undone completion
+        const prevBy = completions.filter(c => c.taskId === id && c.id !== removed?.id)[0]?.by || null;
+        setTasks(prev => prev.map(x => x.id === id ? { ...x, done, lastBy: prevBy } : x));
+        DB.setTaskDone(id, done, prevBy).catch(fail);
+      }
     }
   };
 
@@ -175,12 +227,15 @@ function App() {
   const onTaskPartToggle = (id, who) => {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
+    const turningOn = who === 'maria' ? !t.doneMaria : !t.doneDaniil;
     const doneMaria  = who === 'maria'  ? !t.doneMaria  : t.doneMaria;
     const doneDaniil = who === 'daniil' ? !t.doneDaniil : t.doneDaniil;
     const done = doneMaria && doneDaniil;
     if (done && !(t.doneMaria && t.doneDaniil)) setToast('Оба отметили — готово! 🎉');
     setTasks(prev => prev.map(x => x.id === id ? { ...x, doneMaria, doneDaniil, done } : x));
     DB.setTaskParts(id, { doneMaria, doneDaniil, done }).catch(fail);
+    if (turningOn) recordCompletion(id, who);
+    else removeLatestCompletion(id, who);
   };
 
   const onDateAccept = (id) => {
@@ -200,6 +255,39 @@ function App() {
       },
     });
   };
+  const onDateDelete = (id) => {
+    const item = dates.find(d => d.id === id);
+    setConfirm({
+      title: 'Удалить свидание?',
+      message: `«${item?.title}» исчезнет из планов.`,
+      onConfirm: () => {
+        setDates(prev => prev.filter(d => d.id !== id));
+        setToast('Свидание удалено');
+        DB.deleteDate(id).catch(fail);
+      },
+    });
+  };
+
+  // ---------- achievements ----------
+  const onAchToggle = (item) => {
+    const unlocked = !item.unlocked;
+    const next = { ...item, unlocked, unlockedAt: unlocked ? iso(TODAY) : undefined, progress: unlocked ? 100 : 0 };
+    setAch(prev => prev.map(a => a.id === item.id ? next : a));
+    setDetail(d => (d && d.kind === 'ach' && d.item.id === item.id) ? { kind: 'ach', item: next } : d);
+    setToast(unlocked ? 'Достижение открыто 🏆' : 'Достижение снова в пути');
+    DB.setAchievementUnlocked(item.id, unlocked, unlocked ? iso(TODAY) : null).catch(fail);
+  };
+
+  // ---------- couple settings ----------
+  const onSaveSettings = async (s) => {
+    try {
+      const saved = await DB.saveSettings(s);
+      applyCoupleSettings(saved);
+      setSettings(saved);
+      setSettingsOpen(false);
+      setToast('Настройки сохранены');
+    } catch (e) { fail(e); }
+  };
 
   const onAddImportantDate = async (e) => {
     try {
@@ -214,32 +302,55 @@ function App() {
     DB.deleteImportantDate(id).catch(fail);
   };
 
-  const openAdd = (mode = 'activity') => { setAddMode(mode); setAddOpen(true); };
+  // ---------- add / edit ----------
+  const openAdd = (mode = 'activity') => { setEditItem(null); setAddMode(mode); setAddOpen(true); };
+  const openEdit = (mode, item) => { setEditItem(item); setAddMode(mode); setDetail(null); setAddOpen(true); };
 
   const handleAdd = async (entry) => {
     try {
-      if (addMode === 'activity') {
-        const row = await DB.addActivity({ ...entry, date: iso(TODAY) });
-        setActivities(prev => [row, ...prev]);
-        setToast('Запись добавлена в ленту');
-      } else if (addMode === 'task') {
-        const row = await DB.addTask(entry);
-        setTasks(prev => [row, ...prev]);
-        setToast('Задача добавлена');
-      } else if (addMode === 'date') {
-        const row = await DB.addDate(entry);
-        setDates(prev => [row, ...prev]);
-        setToast('Свидание предложено');
-      } else if (addMode === 'note') {
-        const row = await DB.addNote({ ...entry, date: iso(TODAY) });
-        setNotes(prev => [row, ...prev]);
-        setToast('Записка сохранена');
-      } else if (addMode === 'media') {
-        const row = await DB.addMedia(entry);
-        setMedia(prev => [row, ...prev]);
-        setToast('Добавлено в коллекцию');
+      if (editItem) {
+        if (addMode === 'activity') {
+          const row = await DB.updateActivity(editItem.id, entry);
+          setActivities(prev => prev.map(a => a.id === row.id ? row : a).sort(byDateDesc));
+        } else if (addMode === 'task') {
+          const row = await DB.updateTask(editItem.id, entry);
+          setTasks(prev => prev.map(t => t.id === row.id ? { ...t, ...row } : t));
+        } else if (addMode === 'date') {
+          const row = await DB.updateDate(editItem.id, entry);
+          setDates(prev => prev.map(d => d.id === row.id ? row : d));
+        } else if (addMode === 'note') {
+          const row = await DB.updateNote(editItem.id, entry);
+          setNotes(prev => prev.map(n => n.id === row.id ? row : n));
+        } else if (addMode === 'media') {
+          const row = await DB.updateMedia(editItem.id, entry);
+          setMedia(prev => prev.map(m => m.id === row.id ? row : m));
+        }
+        setToast('Изменения сохранены');
+      } else {
+        if (addMode === 'activity') {
+          const row = await DB.addActivity(entry);
+          setActivities(prev => [row, ...prev].sort(byDateDesc));
+          setToast('Запись добавлена в ленту');
+        } else if (addMode === 'task') {
+          const row = await DB.addTask(entry);
+          setTasks(prev => [row, ...prev]);
+          setToast('Задача добавлена');
+        } else if (addMode === 'date') {
+          const row = await DB.addDate(entry);
+          setDates(prev => [row, ...prev]);
+          setToast('Свидание предложено');
+        } else if (addMode === 'note') {
+          const row = await DB.addNote({ ...entry, date: iso(TODAY) });
+          setNotes(prev => [row, ...prev]);
+          setToast('Записка сохранена');
+        } else if (addMode === 'media') {
+          const row = await DB.addMedia(entry);
+          setMedia(prev => [row, ...prev]);
+          setToast('Добавлено в коллекцию');
+        }
       }
       setAddOpen(false);
+      setEditItem(null);
     } catch (e) {
       fail(e);
     }
@@ -301,21 +412,21 @@ function App() {
           <div className="couple-row">
             <Avatar who="maria" />
             <div>
-              <div className="couple-name">Мария</div>
-              <div className="couple-meta">это вы · сегодня онлайн</div>
+              <div className="couple-name">{COUPLE.maria.name}</div>
+              <div className="couple-meta">{monthCounts.maria} {plural(monthCounts.maria, 'запись', 'записи', 'записей')} за месяц</div>
             </div>
           </div>
           <div className="couple-row">
             <Avatar who="daniil" />
             <div>
-              <div className="couple-name">Даниил</div>
-              <div className="couple-meta">был час назад</div>
+              <div className="couple-name">{COUPLE.daniil.name}</div>
+              <div className="couple-meta">{monthCounts.daniil} {plural(monthCounts.daniil, 'запись', 'записи', 'записей')} за месяц</div>
             </div>
           </div>
           <div className="divider"></div>
           <div className="row" style={{ gap: 6, justifyContent: 'center', fontSize: 12 }}>
             <span className="muted">Вместе</span>
-            <span className="serif" style={{ color: 'var(--maria-ink)' }}>2 года 8 месяцев</span>
+            <span className="serif" style={{ color: 'var(--maria-ink)' }}>{togetherLabel(COUPLE.start)}</span>
           </div>
         </div>
 
@@ -360,9 +471,9 @@ function App() {
         {screen === 'feed'     && <FeedScreen     activities={activities} onLike={onLike} onDelete={onDelete} onSelect={(item) => setDetail({ kind: 'activity', item })} />}
         {screen === 'calendar' && <CalendarScreen activities={activities} dates={dates} onSelectDay={(date, events) => setDayOpen({ date, events })} />}
         {screen === 'tasks'    && <TasksScreen    tasks={tasks} onToggle={onTaskToggle} onPartToggle={onTaskPartToggle} onAdd={() => openAdd('task')} onSelect={(item) => setDetail({ kind: 'task', item })} />}
-        {screen === 'dates'    && <DatesScreen    dates={dates} onAccept={onDateAccept} onDecline={onDateDecline} onAdd={() => openAdd('date')} />}
+        {screen === 'dates'    && <DatesScreen    dates={dates} onAccept={onDateAccept} onDecline={onDateDecline} onAdd={() => openAdd('date')} onEdit={(item) => openEdit('date', item)} onDelete={onDateDelete} />}
         {screen === 'stats'    && <StatsScreen    activities={activities} />}
-        {screen === 'ach'      && <AchievementsScreen achievements={achievements} onSelect={(item) => setDetail({ kind: 'ach', item })} />}
+        {screen === 'ach'      && <AchievementsScreen achievements={achievements} level={level} onSelect={(item) => setDetail({ kind: 'ach', item })} />}
         {screen === 'notes'    && <NotesScreen    notes={notes} onAdd={() => openAdd('note')} onSelect={(item) => setDetail({ kind: 'note', item })} />}
         {screen === 'media'    && <MediaScreen    media={media} onAdd={() => openAdd('media')} onSelect={(item) => setDetail({ kind: 'media', item })} />}
       </main>
@@ -375,7 +486,8 @@ function App() {
         open={addOpen}
         mode={addMode}
         setMode={setAddMode}
-        onClose={() => setAddOpen(false)}
+        editItem={editItem}
+        onClose={() => { setAddOpen(false); setEditItem(null); }}
         onSubmit={handleAdd}
       />
 
@@ -385,26 +497,32 @@ function App() {
         item={detail?.kind === 'activity' ? detail.item : null}
         onClose={() => setDetail(null)}
         onDelete={(item) => onDelete(item.id)}
+        onEdit={(item) => openEdit('activity', item)}
         onLike={onLike}
       />
       <TaskDetailModal
         item={detail?.kind === 'task' ? detail.item : null}
+        completions={detail?.kind === 'task' ? completions.filter(c => c.taskId === detail.item.id) : []}
         onClose={() => setDetail(null)}
         onToggle={onTaskToggle}
+        onEdit={(item) => openEdit('task', item)}
         onDelete={onTaskDelete}
       />
       <AchievementDetailModal
         item={detail?.kind === 'ach' ? detail.item : null}
         onClose={() => setDetail(null)}
+        onToggle={onAchToggle}
       />
       <NoteDetailModal
         item={detail?.kind === 'note' ? detail.item : null}
         onClose={() => setDetail(null)}
+        onEdit={(item) => openEdit('note', item)}
         onDelete={onNoteDelete}
       />
       <MediaDetailModal
         item={detail?.kind === 'media' ? detail.item : null}
         onClose={() => setDetail(null)}
+        onEdit={(item) => openEdit('media', item)}
         onDelete={onMediaDelete}
         onRate={onMediaRate}
       />
@@ -412,6 +530,8 @@ function App() {
       <CoupleSettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onSave={onSaveSettings}
         importantDates={importantDates}
         onAddDate={onAddImportantDate}
         onDeleteDate={onDeleteImportantDate}
@@ -423,12 +543,13 @@ function App() {
   );
 }
 
-/* ---------- Add modal — multi-mode ---------- */
-function AddModal({ open, mode, setMode, onClose, onSubmit }) {
+/* ---------- Add / Edit modal — multi-mode ---------- */
+function AddModal({ open, mode, setMode, editItem, onClose, onSubmit }) {
   const [type, setType] = useState('chore');
   const [by, setBy]     = useState('maria');
   const [title, setTitle] = useState('');
   const [note, setNote]   = useState('');
+  const [actDate, setActDate] = useState(iso(TODAY));
 
   // task fields
   const [taskAssignee, setTaskAssignee] = useState('rotate');
@@ -446,20 +567,44 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
   const [mediaType, setMediaType] = useState('movie');
   const [mediaAuthor, setMediaAuthor] = useState('');
   const [mediaDesc, setMediaDesc] = useState('');
+  const [mediaStatus, setMediaStatus] = useState('watched');
   const [mediaRatingMaria, setMediaRatingMaria]   = useState(5);
   const [mediaRatingDaniil, setMediaRatingDaniil] = useState(5);
 
   useEffect(() => {
-    if (open) {
-      setTitle(''); setNote(''); setDateDate(''); setDateTime(''); setMediaAuthor('');
-      setMediaDesc(''); setMediaRatingMaria(5); setMediaRatingDaniil(5);
+    if (!open) return;
+    if (editItem) {
+      // prefill from the item being edited
+      if (mode === 'activity') {
+        setType(editItem.type); setBy(editItem.by);
+        setTitle(editItem.title); setNote(editItem.note || '');
+        setActDate(editItem.date);
+      } else if (mode === 'task') {
+        setTitle(editItem.title); setTaskAssignee(editItem.assignee); setTaskRecur(editItem.recur);
+      } else if (mode === 'date') {
+        setTitle(editItem.title); setNote(editItem.desc === 'Без описания' ? '' : editItem.desc);
+        setBy(editItem.by); setDateDate(editItem.eventDate || ''); setDateTime(editItem.eventTime || '');
+        setDateTag(editItem.tag);
+      } else if (mode === 'note') {
+        setTitle(editItem.text); setNoteFrom(editItem.from);
+      } else if (mode === 'media') {
+        setTitle(editItem.title); setMediaType(editItem.type);
+        setMediaAuthor(editItem.author === '—' ? '' : editItem.author);
+        setMediaDesc(editItem.desc || ''); setMediaStatus(editItem.status || 'watched');
+        setMediaRatingMaria(editItem.ratingMaria || 0); setMediaRatingDaniil(editItem.ratingDaniil || 0);
+      }
+    } else {
+      setTitle(''); setNote(''); setActDate(iso(TODAY));
+      setDateDate(''); setDateTime(''); setMediaAuthor('');
+      setMediaDesc(''); setMediaStatus('watched');
+      setMediaRatingMaria(5); setMediaRatingDaniil(5);
     }
-  }, [open, mode]);
+  }, [open, mode, editItem]);
 
   const submit = () => {
     if (!title.trim()) return;
     if (mode === 'activity') {
-      onSubmit({ type, by, title: title.trim(), note: note.trim() || undefined, icon: ACTIVITY_TYPES[type].icon });
+      onSubmit({ type, by, title: title.trim(), note: note.trim() || undefined, icon: ACTIVITY_TYPES[type].icon, date: actDate || iso(TODAY) });
     } else if (mode === 'task') {
       onSubmit({ title: title.trim(), assignee: taskAssignee, recur: taskRecur, lastBy: null });
     } else if (mode === 'date') {
@@ -480,10 +625,10 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
         title: title.trim(),
         author: mediaAuthor.trim() || '—',
         desc: mediaDesc.trim() || undefined,
-        ratingMaria: mediaRatingMaria,
-        ratingDaniil: mediaRatingDaniil,
-        date: iso(TODAY),
-        status: 'watched',
+        ratingMaria: mediaStatus === 'watched' ? mediaRatingMaria : 0,
+        ratingDaniil: mediaStatus === 'watched' ? mediaRatingDaniil : 0,
+        date: editItem ? editItem.date : iso(TODAY),
+        status: mediaStatus,
         cover: title.trim().charAt(0).toUpperCase(),
       });
     }
@@ -501,8 +646,8 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Добавить запись"
-      sub="Что произошло сегодня?"
+      title={editItem ? 'Редактировать' : 'Добавить запись'}
+      sub={editItem ? 'Поправьте, что нужно — и сохраните' : 'Что произошло сегодня?'}
       actions={
         <>
           <button className="btn" onClick={onClose}>Отмена</button>
@@ -510,11 +655,13 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
         </>
       }
     >
-      <div className="row wrap" style={{ gap: 6, marginBottom: 20 }}>
-        {MODES.map(m => (
-          <button key={m.id} className={'chip ' + (mode === m.id ? 'active' : '')} onClick={() => setMode(m.id)}>{m.label}</button>
-        ))}
-      </div>
+      {!editItem && (
+        <div className="row wrap" style={{ gap: 6, marginBottom: 20 }}>
+          {MODES.map(m => (
+            <button key={m.id} className={'chip ' + (mode === m.id ? 'active' : '')} onClick={() => setMode(m.id)}>{m.label}</button>
+          ))}
+        </div>
+      )}
 
       {mode === 'activity' && (
         <div className="stack">
@@ -528,12 +675,18 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
               ))}
             </div>
           </div>
-          <div>
-            <label className="label">Кто сделал</label>
-            <div className="seg">
-              <button className={by === 'maria'  ? 'active' : ''} onClick={() => setBy('maria')}>Мария</button>
-              <button className={by === 'daniil' ? 'active' : ''} onClick={() => setBy('daniil')}>Даниил</button>
-              <button className={by === 'both'   ? 'active' : ''} onClick={() => setBy('both')}>Вместе</button>
+          <div className="grid-2">
+            <div>
+              <label className="label">Кто сделал</label>
+              <div className="seg">
+                <button className={by === 'maria'  ? 'active' : ''} onClick={() => setBy('maria')}>{COUPLE.maria.name}</button>
+                <button className={by === 'daniil' ? 'active' : ''} onClick={() => setBy('daniil')}>{COUPLE.daniil.name}</button>
+                <button className={by === 'both'   ? 'active' : ''} onClick={() => setBy('both')}>Вместе</button>
+              </div>
+            </div>
+            <div>
+              <label className="label">Когда</label>
+              <input className="input" type="date" value={actDate} onChange={e => setActDate(e.target.value)} />
             </div>
           </div>
           <div>
@@ -556,7 +709,7 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
           <div>
             <label className="label">Кто делает</label>
             <div className="row wrap" style={{ gap: 6 }}>
-              {[['rotate','По очереди'],['maria','Мария'],['daniil','Даниил'],['both','Вместе']].map(([k,l]) => (
+              {[['rotate','По очереди'],['maria',COUPLE.maria.name],['daniil',COUPLE.daniil.name],['both','Вместе']].map(([k,l]) => (
                 <button key={k} className={'chip ' + (taskAssignee === k ? 'active' : '')} onClick={() => setTaskAssignee(k)}>{l}</button>
               ))}
             </div>
@@ -609,8 +762,8 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
           <div>
             <label className="label">От кого</label>
             <div className="seg">
-              <button className={by === 'maria'  ? 'active' : ''} onClick={() => setBy('maria')}>Мария</button>
-              <button className={by === 'daniil' ? 'active' : ''} onClick={() => setBy('daniil')}>Даниил</button>
+              <button className={by === 'maria'  ? 'active' : ''} onClick={() => setBy('maria')}>{COUPLE.maria.name}</button>
+              <button className={by === 'daniil' ? 'active' : ''} onClick={() => setBy('daniil')}>{COUPLE.daniil.name}</button>
             </div>
           </div>
         </div>
@@ -621,8 +774,8 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
           <div>
             <label className="label">От кого</label>
             <div className="seg">
-              <button className={noteFrom === 'maria'  ? 'active' : ''} onClick={() => setNoteFrom('maria')}>Мария → Даниилу</button>
-              <button className={noteFrom === 'daniil' ? 'active' : ''} onClick={() => setNoteFrom('daniil')}>Даниил → Марии</button>
+              <button className={noteFrom === 'maria'  ? 'active' : ''} onClick={() => setNoteFrom('maria')}>{COUPLE.maria.name} → {COUPLE.daniil.name}</button>
+              <button className={noteFrom === 'daniil' ? 'active' : ''} onClick={() => setNoteFrom('daniil')}>{COUPLE.daniil.name} → {COUPLE.maria.name}</button>
             </div>
           </div>
           <div>
@@ -655,28 +808,38 @@ function AddModal({ open, mode, setMode, onClose, onSubmit }) {
             <textarea className="textarea" value={mediaDesc} onChange={e => setMediaDesc(e.target.value)} placeholder="О чём это, почему стоит посмотреть / прочитать…" />
           </div>
           <div>
-            <label className="label">Оценки — каждый свою</label>
-            <div className="stack sm">
-              {[['maria', 'Мария', mediaRatingMaria, setMediaRatingMaria], ['daniil', 'Даниил', mediaRatingDaniil, setMediaRatingDaniil]].map(([who, name, val, setVal]) => (
-                <div key={who} className="row" style={{ gap: 10 }}>
-                  <Avatar who={who} size="sm" />
-                  <span style={{ fontSize: 13, fontWeight: 600, width: 58 }}>{name}</span>
-                  <div className="row" style={{ gap: 2 }}>
-                    {[1, 2, 3, 4, 5].map(n => (
-                      <button
-                        key={n}
-                        className="icon-btn"
-                        style={{ color: n <= val ? 'var(--gold)' : 'var(--border-strong)' }}
-                        onClick={() => setVal(n)}
-                      >
-                        <Icon name="star" size={22} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <label className="label">Статус</label>
+            <div className="seg">
+              <button className={mediaStatus === 'watched' ? 'active' : ''} onClick={() => setMediaStatus('watched')}>{mediaType === 'book' ? 'Прочитано' : 'Просмотрено'}</button>
+              <button className={mediaStatus === 'reading' ? 'active' : ''} onClick={() => setMediaStatus('reading')}>{mediaType === 'book' ? 'Читаем' : 'Смотрим'}</button>
+              <button className={mediaStatus === 'planned' ? 'active' : ''} onClick={() => setMediaStatus('planned')}>В планах</button>
             </div>
           </div>
+          {mediaStatus === 'watched' && (
+            <div>
+              <label className="label">Оценки — каждый свою</label>
+              <div className="stack sm">
+                {[['maria', COUPLE.maria.name, mediaRatingMaria, setMediaRatingMaria], ['daniil', COUPLE.daniil.name, mediaRatingDaniil, setMediaRatingDaniil]].map(([who, name, val, setVal]) => (
+                  <div key={who} className="row" style={{ gap: 10 }}>
+                    <Avatar who={who} size="sm" />
+                    <span style={{ fontSize: 13, fontWeight: 600, width: 58 }}>{name}</span>
+                    <div className="row" style={{ gap: 2 }}>
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <button
+                          key={n}
+                          className="icon-btn"
+                          style={{ color: n <= val ? 'var(--gold)' : 'var(--border-strong)' }}
+                          onClick={() => setVal(n)}
+                        >
+                          <Icon name="star" size={22} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Modal>
@@ -691,7 +854,7 @@ function DayModal({ day, onClose, onAdd }) {
       open={!!day}
       onClose={onClose}
       title={fmtDateLong(day.date)}
-      sub={day.events.length === 0 ? 'В этот день ничего не записано' : `${day.events.length} ${day.events.length === 1 ? 'запись' : 'записей'}`}
+      sub={day.events.length === 0 ? 'В этот день ничего не записано' : `${day.events.length} ${plural(day.events.length, 'запись', 'записи', 'записей')}`}
       actions={
         <>
           <button className="btn" onClick={onClose}>Закрыть</button>
@@ -708,7 +871,7 @@ function DayModal({ day, onClose, onAdd }) {
               <div className="activity-meta">
                 <ByPill by={e.by} />
                 <span>·</span>
-                <span>{ACTIVITY_TYPES[e.type].label}</span>
+                <span>{e.isDate ? 'Свидание' : ACTIVITY_TYPES[e.type].label}</span>
               </div>
               {e.note && <div className="activity-note">{e.note}</div>}
             </div>

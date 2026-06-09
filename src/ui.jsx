@@ -47,6 +47,7 @@ function Icon({ name, size = 16 }) {
     case 'note':       return <svg {...props}><path d="M4 4h12l4 4v12H4z"/><path d="M16 4v4h4"/></svg>;
     case 'filter':     return <svg {...props}><path d="M3 5h18l-7 9v6l-4-2v-4z"/></svg>;
     case 'menu':       return <svg {...props}><path d="M4 7h16M4 12h16M4 17h16"/></svg>;
+    case 'edit':       return <svg {...props}><path d="M17 3l4 4L8 20l-5 1 1-5z"/></svg>;
     default: return null;
   }
 }

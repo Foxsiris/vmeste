@@ -30,7 +30,7 @@ function ConfirmModal({ confirm, onClose }) {
 }
 
 /* ---------- Activity detail ---------- */
-function ActivityDetailModal({ item, onClose, onDelete, onLike }) {
+function ActivityDetailModal({ item, onClose, onDelete, onEdit, onLike }) {
   if (!item) return null;
   const type = ACTIVITY_TYPES[item.type];
   const liked = item.likedBy && item.likedBy.length > 0;
@@ -44,6 +44,7 @@ function ActivityDetailModal({ item, onClose, onDelete, onLike }) {
         <>
           <button className="btn" onClick={onClose}>Закрыть</button>
           <button className="btn" style={{ color: 'var(--maria-ink)' }} onClick={() => onDelete(item)}>Удалить</button>
+          <button className="btn primary" onClick={() => onEdit(item)}><Icon name="edit" size={14} /> Редактировать</button>
         </>
       }
     >
@@ -69,7 +70,7 @@ function ActivityDetailModal({ item, onClose, onDelete, onLike }) {
           <div className="label">Реакция</div>
           <div className="row" style={{ gap: 8 }}>
             <button
-              className={'btn sm ' + (liked ? '' : '')}
+              className="btn sm"
               onClick={() => onLike(item.id)}
               style={liked ? { background: 'var(--maria-soft)', borderColor: 'var(--maria-soft)', color: 'var(--maria-ink)' } : {}}
             >
@@ -83,15 +84,15 @@ function ActivityDetailModal({ item, onClose, onDelete, onLike }) {
   );
 }
 
-/* ---------- Task detail ---------- */
-function TaskDetailModal({ item, onClose, onToggle, onDelete }) {
+/* ---------- Task detail — real completion history ---------- */
+function TaskDetailModal({ item, completions = [], onClose, onToggle, onEdit, onDelete }) {
   if (!item) return null;
-  // Mock completion history
-  const history = [
-    { date: daysAgo(0),  by: item.lastBy || 'maria' },
-    { date: daysAgo(7),  by: item.lastBy === 'maria' ? 'daniil' : 'maria' },
-    { date: daysAgo(14), by: item.lastBy || 'maria' },
-  ];
+  const history = completions.slice(0, 6);
+  const monthAgo = daysAgo(30);
+  const lastMonthCount = completions.filter(c => c.date >= monthAgo).length;
+  const nextTurn = item.assignee === 'rotate'
+    ? (item.lastBy === 'maria' ? 'daniil' : 'maria')
+    : null;
   return (
     <Modal
       open={!!item}
@@ -102,30 +103,40 @@ function TaskDetailModal({ item, onClose, onToggle, onDelete }) {
         <>
           <button className="btn" onClick={onClose}>Закрыть</button>
           <button className="btn" style={{ color: 'var(--maria-ink)' }} onClick={() => onDelete(item)}>Удалить</button>
-          <button className="btn primary" onClick={() => { onToggle(item.id); onClose(); }}>
-            {item.done ? 'Вернуть в работу' : 'Отметить сделанным'}
-          </button>
+          <button className="btn" onClick={() => onEdit(item)}><Icon name="edit" size={14} /> Изменить</button>
+          {item.assignee !== 'both' && (
+            <button className="btn primary" onClick={() => { onToggle(item.id); onClose(); }}>
+              {item.done ? 'Вернуть в работу' : 'Отметить сделанным'}
+            </button>
+          )}
         </>
       }
     >
       <div className="stack">
         <div>
           <div className="label">История выполнения</div>
-          <div className="stack sm">
-            {history.map((h, i) => (
-              <div key={i} className="row" style={{ padding: 10, background: 'var(--surface-2)', borderRadius: 10, gap: 10 }}>
-                <Avatar who={h.by} size="sm" />
-                <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{COUPLE[h.by].name}</div>
-                  <div className="muted" style={{ fontSize: 12 }}>{fmtRelative(h.date)}</div>
+          {history.length === 0 ? (
+            <div className="muted" style={{ fontSize: 13, padding: '8px 0' }}>
+              Эту задачу ещё ни разу не отмечали выполненной.
+            </div>
+          ) : (
+            <div className="stack sm">
+              {history.map((h) => (
+                <div key={h.id} className="row" style={{ padding: 10, background: 'var(--surface-2)', borderRadius: 10, gap: 10 }}>
+                  <Avatar who={h.by} size="sm" />
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600 }}>{COUPLE[h.by].name}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>{fmtRelative(h.date)}</div>
+                  </div>
+                  <span style={{ marginLeft: 'auto', color: 'var(--daniil-ink)' }}><Icon name="check" size={14} /></span>
                 </div>
-                <Icon name="check" size={14} style={{ marginLeft: 'auto', color: 'var(--daniil-ink)' }} />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="muted" style={{ fontSize: 12.5, padding: 10, background: 'var(--bg-soft)', borderRadius: 10 }}>
-          💡 За последний месяц эту задачу выполняли {history.length} раз. Очередь — на {COUPLE[history[0].by === 'maria' ? 'daniil' : 'maria'].name}е.
+          💡 За последний месяц — {lastMonthCount} {plural(lastMonthCount, 'выполнение', 'выполнения', 'выполнений')}.
+          {nextTurn && <> Очередь — за {COUPLE[nextTurn].name}.</>}
         </div>
       </div>
     </Modal>
@@ -133,16 +144,25 @@ function TaskDetailModal({ item, onClose, onToggle, onDelete }) {
 }
 
 /* ---------- Achievement detail ---------- */
-function AchievementDetailModal({ item, onClose }) {
+function AchievementDetailModal({ item, onClose, onToggle }) {
   if (!item) return null;
   return (
     <Modal
       open={!!item}
       onClose={onClose}
       title={item.name}
-      sub={item.unlocked ? 'Открыто 14 апреля 2026' : 'Ещё не открыто — но всё впереди'}
+      sub={item.unlocked
+        ? (item.unlockedAt ? 'Открыто ' + fmtDateFull(item.unlockedAt) : 'Открыто')
+        : 'Ещё не открыто — но всё впереди'}
       maxWidth={440}
-      actions={<button className="btn" onClick={onClose}>Закрыть</button>}
+      actions={
+        <>
+          <button className="btn" onClick={onClose}>Закрыть</button>
+          <button className={'btn ' + (item.unlocked ? '' : 'primary')} onClick={() => onToggle(item)}>
+            {item.unlocked ? 'Снять отметку' : '🏆 Отметить открытым'}
+          </button>
+        </>
+      }
     >
       <div className="stack" style={{ alignItems: 'center', textAlign: 'center' }}>
         <div className={'ach-medal ' + (item.unlocked ? '' : 'locked')} style={{
@@ -162,9 +182,9 @@ function AchievementDetailModal({ item, onClose }) {
           <div style={{ width: '100%' }}>
             <div className="row between" style={{ fontSize: 12, marginBottom: 6 }}>
               <span className="muted">Прогресс</span>
-              <span style={{ fontWeight: 600 }}>62%</span>
+              <span style={{ fontWeight: 600 }}>{item.progress || 0}%</span>
             </div>
-            <div className="progress"><div className="progress-fill both" style={{ width: '62%' }}></div></div>
+            <div className="progress"><div className="progress-fill both" style={{ width: `${item.progress || 0}%` }}></div></div>
           </div>
         )}
       </div>
@@ -173,19 +193,21 @@ function AchievementDetailModal({ item, onClose }) {
 }
 
 /* ---------- Note detail ---------- */
-function NoteDetailModal({ item, onClose, onDelete }) {
+function NoteDetailModal({ item, onClose, onEdit, onDelete }) {
   if (!item) return null;
+  const to = item.from === 'maria' ? 'daniil' : 'maria';
   return (
     <Modal
       open={!!item}
       onClose={onClose}
-      title={'Записка от ' + COUPLE[item.from].name + (item.from === 'maria' ? ' для Даниила' : ' для Марии')}
-      sub={fmtDateLong(item.date) + ' · ' + fmtRelative(item.date)}
+      title={'Записка от ' + COUPLE[item.from].name}
+      sub={`для: ${COUPLE[to].name} · ${fmtDateLong(item.date)} (${fmtRelative(item.date)})`}
       maxWidth={460}
       actions={
         <>
           <button className="btn" onClick={onClose}>Закрыть</button>
           <button className="btn" style={{ color: 'var(--maria-ink)' }} onClick={() => onDelete(item)}>Удалить</button>
+          <button className="btn primary" onClick={() => onEdit(item)}><Icon name="edit" size={14} /> Редактировать</button>
         </>
       }
     >
@@ -201,7 +223,7 @@ function NoteDetailModal({ item, onClose, onDelete }) {
 }
 
 /* ---------- Media detail ---------- */
-function MediaDetailModal({ item, onClose, onDelete, onRate }) {
+function MediaDetailModal({ item, onClose, onEdit, onDelete, onRate }) {
   if (!item) return null;
   const typeLabel = { movie: 'Фильм', show: 'Сериал', book: 'Книга' }[item.type] || '';
   return (
@@ -215,6 +237,7 @@ function MediaDetailModal({ item, onClose, onDelete, onRate }) {
         <>
           <button className="btn" onClick={onClose}>Закрыть</button>
           <button className="btn" style={{ color: 'var(--maria-ink)' }} onClick={() => onDelete(item)}>Удалить</button>
+          <button className="btn primary" onClick={() => onEdit(item)}><Icon name="edit" size={14} /> Редактировать</button>
         </>
       }
     >
@@ -224,8 +247,8 @@ function MediaDetailModal({ item, onClose, onDelete, onRate }) {
           <div>
             <div className="label">Статус</div>
             <div className="row" style={{ gap: 6 }}>
-              {item.status === 'watched' && <span className="pill both"><span className="dot"></span>Просмотрено</span>}
-              {item.status === 'reading' && <span className="pill maria"><span className="dot"></span>Читаем</span>}
+              {item.status === 'watched' && <span className="pill both"><span className="dot"></span>{item.type === 'book' ? 'Прочитано' : 'Просмотрено'}</span>}
+              {item.status === 'reading' && <span className="pill maria"><span className="dot"></span>{item.type === 'book' ? 'Читаем' : 'Смотрим'}</span>}
               {item.status === 'planned' && <span className="pill"><span className="dot"></span>В планах</span>}
               {item.date && <span className="muted" style={{ fontSize: 12.5 }}>{fmtDateLong(item.date)}</span>}
             </div>
@@ -240,7 +263,7 @@ function MediaDetailModal({ item, onClose, onDelete, onRate }) {
             <div>
               <div className="label">Оценки — каждый свою</div>
               <div className="stack sm">
-                {[['maria', 'Мария', item.ratingMaria], ['daniil', 'Даниил', item.ratingDaniil]].map(([who, name, val]) => (
+                {[['maria', COUPLE.maria.name, item.ratingMaria], ['daniil', COUPLE.daniil.name, item.ratingDaniil]].map(([who, name, val]) => (
                   <div key={who} className="row" style={{ gap: 10 }}>
                     <Avatar who={who} size="sm" />
                     <span style={{ fontSize: 13, fontWeight: 600, width: 58 }}>{name}</span>
@@ -268,19 +291,42 @@ function MediaDetailModal({ item, onClose, onDelete, onRate }) {
   );
 }
 
-/* ---------- Couple / profile settings ---------- */
-function CoupleSettingsModal({ open, onClose, importantDates = [], onAddDate, onDeleteDate }) {
+/* ---------- Couple / profile settings — persisted to Supabase ---------- */
+function CoupleSettingsModal({ open, onClose, settings, onSave, importantDates = [], onAddDate, onDeleteDate }) {
   const [mariaName, setMariaName]   = useMState('Мария');
   const [daniilName, setDaniilName] = useMState('Даниил');
   const [anniversary, setAnniversary] = useMState('2023-09-14');
   const [adding, setAdding]     = useMState(false);
   const [newLabel, setNewLabel] = useMState('');
   const [newWhen, setNewWhen]   = useMState('');
+
+  // local notification prefs (static site — stored on this device)
+  const [notif, setNotif] = useMState(() => {
+    try { return JSON.parse(localStorage.getItem('vmeste_notif')) || { dates: true, idle: true, thanks: false }; }
+    catch { return { dates: true, idle: true, thanks: false }; }
+  });
+  const toggleNotif = (key) => {
+    const next = { ...notif, [key]: !notif[key] };
+    setNotif(next);
+    try { localStorage.setItem('vmeste_notif', JSON.stringify(next)); } catch {}
+  };
+
+  useMEffect(() => {
+    if (!open) return;
+    setMariaName(settings?.mariaName || COUPLE.maria.name);
+    setDaniilName(settings?.daniilName || COUPLE.daniil.name);
+    setAnniversary(settings?.anniversary || COUPLE.start);
+    setAdding(false); setNewLabel(''); setNewWhen('');
+  }, [open, settings]);
+
   const saveDate = () => {
     if (!newLabel.trim() || !newWhen.trim()) return;
     onAddDate && onAddDate({ label: newLabel.trim(), when: newWhen.trim(), icon: '🎂' });
     setNewLabel(''); setNewWhen(''); setAdding(false);
   };
+
+  const daysLeft = anniversary ? daysToAnniversary(anniversary) : null;
+
   return (
     <Modal
       open={open}
@@ -290,21 +336,27 @@ function CoupleSettingsModal({ open, onClose, importantDates = [], onAddDate, on
       actions={
         <>
           <button className="btn" onClick={onClose}>Отмена</button>
-          <button className="btn primary" onClick={onClose}>Сохранить</button>
+          <button
+            className="btn primary"
+            disabled={!mariaName.trim() || !daniilName.trim() || !anniversary}
+            onClick={() => onSave({ mariaName: mariaName.trim(), daniilName: daniilName.trim(), anniversary })}
+          >
+            Сохранить
+          </button>
         </>
       }
     >
       <div className="stack">
         <div className="grid-2">
           <div>
-            <label className="label">Имя 1 (вы)</label>
+            <label className="label">Имя 1</label>
             <div className="row" style={{ gap: 10 }}>
               <Avatar who="maria" />
               <input className="input" value={mariaName} onChange={e => setMariaName(e.target.value)} />
             </div>
           </div>
           <div>
-            <label className="label">Имя 2 (партнёр)</label>
+            <label className="label">Имя 2</label>
             <div className="row" style={{ gap: 10 }}>
               <Avatar who="daniil" />
               <input className="input" value={daniilName} onChange={e => setDaniilName(e.target.value)} />
@@ -314,9 +366,13 @@ function CoupleSettingsModal({ open, onClose, importantDates = [], onAddDate, on
         <div>
           <label className="label">Годовщина</label>
           <input className="input" type="date" value={anniversary} onChange={e => setAnniversary(e.target.value)} />
-          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-            До следующей годовщины — 119 дней
-          </div>
+          {daysLeft !== null && (
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+              {daysLeft === 0
+                ? '🎉 Годовщина сегодня!'
+                : `До следующей годовщины — ${daysLeft} ${plural(daysLeft, 'день', 'дня', 'дней')}`}
+            </div>
+          )}
         </div>
         <div>
           <label className="label">Важные даты</label>
@@ -353,20 +409,14 @@ function CoupleSettingsModal({ open, onClose, importantDates = [], onAddDate, on
           </div>
         </div>
         <div>
-          <label className="label">Уведомления</label>
+          <label className="label">Уведомления (на этом устройстве)</label>
           <div className="stack sm">
-            <label className="row" style={{ gap: 10, padding: 10, background: 'var(--surface-2)', borderRadius: 10 }}>
-              <input type="checkbox" defaultChecked />
-              <span style={{ fontSize: 13.5 }}>Напоминать о свиданиях за день</span>
-            </label>
-            <label className="row" style={{ gap: 10, padding: 10, background: 'var(--surface-2)', borderRadius: 10 }}>
-              <input type="checkbox" defaultChecked />
-              <span style={{ fontSize: 13.5 }}>Подсказки, если не было записей 3+ дня</span>
-            </label>
-            <label className="row" style={{ gap: 10, padding: 10, background: 'var(--surface-2)', borderRadius: 10 }}>
-              <input type="checkbox" />
-              <span style={{ fontSize: 13.5 }}>Сообщать партнёру о благодарностях</span>
-            </label>
+            {[['dates', 'Напоминать о свиданиях за день'], ['idle', 'Подсказки, если не было записей 3+ дня'], ['thanks', 'Сообщать партнёру о благодарностях']].map(([key, text]) => (
+              <label key={key} className="row" style={{ gap: 10, padding: 10, background: 'var(--surface-2)', borderRadius: 10, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!notif[key]} onChange={() => toggleNotif(key)} />
+                <span style={{ fontSize: 13.5 }}>{text}</span>
+              </label>
+            ))}
           </div>
         </div>
       </div>
