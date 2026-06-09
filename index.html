@@ -403,7 +403,8 @@
   .cal-nav { display: flex; gap: 6px; }
   .cal-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    /* minmax(0, …) — иначе длинные названия событий распирают колонки и сетка «плывёт» */
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 8px;
   }
   .cal-dow {
@@ -417,6 +418,8 @@
     border-radius: 12px;
     padding: 10px;
     min-height: 92px;
+    min-width: 0;
+    overflow: hidden;
     display: flex; flex-direction: column; gap: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -428,6 +431,13 @@
   .cal-cell.has-events { background: var(--surface-2); }
   .cal-cell .day-num { font-weight: 600; font-size: 14px; color: var(--ink-2); }
   .cal-cell.today .day-num { color: var(--ink); }
+  .cal-evt {
+    font-size: 11px; color: var(--ink-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 100%;
+  }
+  .cal-evt .ico { margin-right: 4px; }
+  .cal-more { font-size: 11px; color: var(--ink-muted); }
   .cal-dots { display: flex; gap: 3px; margin-top: auto; flex-wrap: wrap; }
   .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
   .cal-dot.maria { background: var(--maria); }
@@ -757,10 +767,29 @@
     .activity { grid-template-columns: 40px 1fr; gap: 12px; padding: 12px 14px; }
     .activity-actions { grid-column: 1 / -1; justify-content: flex-end; }
 
-    /* calendar fits a narrow screen */
-    .cal-grid { gap: 4px; }
-    .cal-cell { min-height: 52px; padding: 5px; border-radius: 9px; }
-    .cal-month { font-size: 22px; }
+    /* calendar fits a narrow screen: square cells, day number + dots only */
+    .cal-grid { gap: 3px; }
+    .cal-cell {
+      min-height: unset;
+      aspect-ratio: 1 / 1;
+      padding: 4px 2px 5px;
+      border-radius: 9px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0;
+    }
+    .cal-cell .day-num { font-size: 13px; line-height: 1.2; }
+    .cal-evt, .cal-more { display: none; }   /* event titles live in the day modal */
+    .cal-dots { justify-content: center; gap: 2.5px; }
+    .cal-dot { width: 5px; height: 5px; }
+    .cal-head { flex-wrap: wrap; gap: 8px; }
+    .cal-month { font-size: 21px; }
+    .cal-month .year { font-size: 19px; }
+    .cal-dow { padding: 2px 0; text-align: center; font-size: 10px; }
+    .card.cal-card { padding: 12px; }
+
+    /* drawer height respects mobile browser chrome */
+    .sidebar { height: 100dvh; }
 
     .fab { bottom: 18px; right: 18px; }
     .modal { padding: 22px; border-radius: 18px; }
@@ -779,6 +808,31 @@
     .row.wrap.filter-chips::-webkit-scrollbar { height: 0; }
     .row.wrap.filter-chips .chip { flex-shrink: 0; }
   }
+
+  /* ---------- Phones: modals become bottom sheets ---------- */
+  @media (max-width: 640px) {
+    .modal-overlay { padding: 0; place-items: end stretch; }
+    .modal {
+      max-width: 100%;
+      width: 100%;
+      border-radius: 22px 22px 0 0;
+      max-height: 92vh;
+      max-height: 92dvh;
+      padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+      animation: sheetUp 0.26s cubic-bezier(0.32, 0.72, 0.25, 1);
+    }
+    .modal::before {
+      content: "";
+      display: block;
+      width: 40px; height: 4px;
+      border-radius: 999px;
+      background: var(--border-strong);
+      margin: -6px auto 14px;
+    }
+    .modal-actions { position: sticky; bottom: -18px; background: var(--surface); padding-bottom: 4px; margin-bottom: -4px; }
+    .modal-actions .btn { flex: 1; justify-content: center; }
+  }
+  @keyframes sheetUp { from { transform: translateY(48px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
   @media (max-width: 430px) {
     .stat-grid, .ach-grid, .media-grid { grid-template-columns: 1fr; }

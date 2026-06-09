@@ -148,7 +148,7 @@ function CalendarScreen({ activities, dates = [], onSelectDay }) {
 
   return (
     <div className="stack lg">
-      <div className="card">
+      <div className="card cal-card">
         <div className="cal-head">
           <div className="cal-month">
             <span style={{ textTransform: 'capitalize' }}>{MONTHS_RU[month]}</span>
@@ -177,12 +177,12 @@ function CalendarScreen({ activities, dates = [], onSelectDay }) {
               >
                 <div className="day-num">{d}</div>
                 {evts.slice(0, 2).map((e, j) => (
-                  <div key={j} style={{ fontSize: 11, color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <span style={{ marginRight: 4 }}>{e.icon || ACTIVITY_TYPES[e.type].icon}</span>
-                    {e.title.length > 16 ? e.title.slice(0,15)+'…' : e.title}
+                  <div key={j} className="cal-evt">
+                    <span className="ico">{e.icon || ACTIVITY_TYPES[e.type].icon}</span>
+                    {e.title}
                   </div>
                 ))}
-                {evts.length > 2 && <div className="muted" style={{ fontSize: 11 }}>+{evts.length - 2}</div>}
+                {evts.length > 2 && <div className="cal-more">+{evts.length - 2}</div>}
                 <div className="cal-dots">
                   {evts.some(e => e.by === 'maria')  && <span className="cal-dot maria"></span>}
                   {evts.some(e => e.by === 'daniil') && <span className="cal-dot daniil"></span>}
@@ -195,11 +195,11 @@ function CalendarScreen({ activities, dates = [], onSelectDay }) {
       </div>
       <div className="grid-2">
         <div className="card">
-          <div className="card-title">События за {MONTHS_RU_LOC[month]}</div>
+          <div className="card-title">События за {MONTHS_RU[month]}</div>
           <div className="stat-value">{monthActs.length}<span className="unit">записей</span></div>
           <div style={{ marginTop: 14 }}>
             <ProgressBar maria={byMaria} daniil={byDaniil} />
-            <div className="row between" style={{ marginTop: 8, fontSize: 12.5 }}>
+            <div className="row between wrap" style={{ marginTop: 8, fontSize: 12.5, rowGap: 4 }}>
               <span><span className="cal-dot maria" style={{ display: 'inline-block', marginRight: 6 }}></span>{COUPLE.maria.name} — {byMaria}</span>
               <span><span className="cal-dot daniil" style={{ display: 'inline-block', marginRight: 6 }}></span>{COUPLE.daniil.name} — {byDaniil}</span>
               <span><span className="cal-dot both" style={{ display: 'inline-block', marginRight: 6 }}></span>Вместе — {byBoth}</span>
