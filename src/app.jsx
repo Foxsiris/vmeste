@@ -31,6 +31,7 @@ function App() {
   const [toast, setToast]           = useState('');
   const [addOpen, setAddOpen]       = useState(false);
   const [addMode, setAddMode]       = useState('activity');
+  const [addDate, setAddDate]       = useState(null); // prefilled date (from a calendar day tap)
   const [editItem, setEditItem]     = useState(null); // item being edited (null = adding)
   const [dayOpen, setDayOpen]       = useState(null);
   const [detail, setDetail]         = useState(null); // { kind, item }
@@ -303,8 +304,8 @@ function App() {
   };
 
   // ---------- add / edit ----------
-  const openAdd = (mode = 'activity') => { setEditItem(null); setAddMode(mode); setAddOpen(true); };
-  const openEdit = (mode, item) => { setEditItem(item); setAddMode(mode); setDetail(null); setAddOpen(true); };
+  const openAdd = (mode = 'activity', date = null) => { setEditItem(null); setAddMode(mode); setAddDate(date); setAddOpen(true); };
+  const openEdit = (mode, item) => { setEditItem(item); setAddMode(mode); setAddDate(null); setDetail(null); setAddOpen(true); };
 
   const handleAdd = async (entry) => {
     try {
@@ -487,11 +488,12 @@ function App() {
         mode={addMode}
         setMode={setAddMode}
         editItem={editItem}
-        onClose={() => { setAddOpen(false); setEditItem(null); }}
+        initialDate={addDate}
+        onClose={() => { setAddOpen(false); setEditItem(null); setAddDate(null); }}
         onSubmit={handleAdd}
       />
 
-      <DayModal day={dayOpen} onClose={() => setDayOpen(null)} onAdd={() => { setDayOpen(null); openAdd('activity'); }} />
+      <DayModal day={dayOpen} onClose={() => setDayOpen(null)} onAdd={() => { const d = dayOpen?.date; setDayOpen(null); openAdd('activity', d); }} />
 
       <ActivityDetailModal
         item={detail?.kind === 'activity' ? detail.item : null}
@@ -544,7 +546,7 @@ function App() {
 }
 
 /* ---------- Add / Edit modal — multi-mode ---------- */
-function AddModal({ open, mode, setMode, editItem, onClose, onSubmit }) {
+function AddModal({ open, mode, setMode, editItem, initialDate, onClose, onSubmit }) {
   const [type, setType] = useState('chore');
   const [by, setBy]     = useState('maria');
   const [title, setTitle] = useState('');
@@ -594,12 +596,13 @@ function AddModal({ open, mode, setMode, editItem, onClose, onSubmit }) {
         setMediaRatingMaria(editItem.ratingMaria || 0); setMediaRatingDaniil(editItem.ratingDaniil || 0);
       }
     } else {
-      setTitle(''); setNote(''); setActDate(iso(TODAY));
-      setDateDate(''); setDateTime(''); setMediaAuthor('');
+      // a day tapped on the calendar prefills the date fields
+      setTitle(''); setNote(''); setActDate(initialDate || iso(TODAY));
+      setDateDate(initialDate || ''); setDateTime(''); setMediaAuthor('');
       setMediaDesc(''); setMediaStatus('watched');
       setMediaRatingMaria(5); setMediaRatingDaniil(5);
     }
-  }, [open, mode, editItem]);
+  }, [open, mode, editItem, initialDate]);
 
   const submit = () => {
     if (!title.trim()) return;
